@@ -1,0 +1,9 @@
+export { CreateVaccinModal } from './create-vaccin-modal';
+export { UpdateVaccinModal } from './update-vaccin-modal';
+export { DetailVaccinModal } from './detail-vaccin-modal';
+export { DetailRendezVousModal } from './detail-rendez-vous-modal';
+export { UpdateRendezVousModal } from './update-rendez-vous-modal';
+export { CreateRendezVousModal } from './create-rendez-vous-modal';
+export { CreatePatientModal } from './create-patient-modal';
+export { DetailPatientModal } from './detail-patient-modal';
+export { DeleteModal } from './delete-modal';

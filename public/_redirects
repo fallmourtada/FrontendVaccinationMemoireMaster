@@ -1,0 +1,13 @@
+# Redirections pour React Router (SPA)
+# Toutes les routes sont gérées par React Router
+/*    /index.html   200
+
+# Redirections spécifiques pour l'API (si nécessaire)
+/api/*  https://your-api-domain.com/api/:splat  200
+
+# Headers de sécurité pour les fichiers statiques
+/*
+  X-Frame-Options: DENY
+  X-XSS-Protection: 1; mode=block
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
