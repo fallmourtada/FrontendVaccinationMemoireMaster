@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { useState, useEffect, useMemo } from 'react';
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -7,7 +7,6 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Table,
@@ -57,8 +56,6 @@ import {
   LayoutGrid,
   List,
   MapPin,
-  FileText,
-  ExternalLink,
   Syringe,
   BookOpen
 } from 'lucide-react';
@@ -83,6 +80,39 @@ import type { EnfantDTO, SaveEnfantDTO, UpdateEnfantDTO, UtilisateurDTO, VaccinD
 import { GroupeSanguinValues, StatutRv } from '@/types';
 import { toast } from 'sonner';
 
+type InfirmierOwnedIds = {
+  parentIds: number[];
+  enfantIds: number[];
+  appointmentIds: number[];
+  vaccinationIds: number[];
+};
+
+const readInfirmierOwnedIds = (email?: string | null): InfirmierOwnedIds => {
+  if (!email) return { parentIds: [], enfantIds: [], appointmentIds: [], vaccinationIds: [] };
+  try {
+    const raw = localStorage.getItem(`infirmier-owned-records:${email.toLowerCase()}`);
+    if (!raw) return { parentIds: [], enfantIds: [], appointmentIds: [], vaccinationIds: [] };
+    const parsed = JSON.parse(raw) as Partial<InfirmierOwnedIds>;
+    return {
+      parentIds: Array.isArray(parsed.parentIds) ? parsed.parentIds : [],
+      enfantIds: Array.isArray(parsed.enfantIds) ? parsed.enfantIds : [],
+      appointmentIds: Array.isArray(parsed.appointmentIds) ? parsed.appointmentIds : [],
+      vaccinationIds: Array.isArray(parsed.vaccinationIds) ? parsed.vaccinationIds : [],
+    };
+  } catch {
+    return { parentIds: [], enfantIds: [], appointmentIds: [], vaccinationIds: [] };
+  }
+};
+
+const addInfirmierOwnedId = (email: string | undefined, key: keyof InfirmierOwnedIds, id: number | null | undefined) => {
+  if (!email || !id) return;
+  const existing = readInfirmierOwnedIds(email);
+  if (!existing[key].includes(id)) {
+    const next = { ...existing, [key]: [...existing[key], id] };
+    localStorage.setItem(`infirmier-owned-records:${email.toLowerCase()}`, JSON.stringify(next));
+  }
+};
+
 
 // ================================
 // COMPOSANT CARD ENFANT
@@ -102,30 +132,27 @@ function EnfantCard({ enfant, onView, onEdit, onDelete, onVaccinate, onViewCarne
   const isMale = enfant.sexe === 'MASCULIN';
   
   return (
-    <Card className="group hover:shadow-lg transition-all duration-300 overflow-hidden">
-      {/* Header avec gradient selon le sexe */}
-      <div className={`h-2 ${isMale ? 'bg-gradient-to-r from-blue-400 to-blue-600' : 'bg-gradient-to-r from-pink-400 to-pink-600'}`} />
-      
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-3">
-            <Avatar className={`h-14 w-14 border-2 ${isMale ? 'border-blue-200' : 'border-pink-200'}`}>
-              <AvatarFallback className={`text-lg font-semibold ${isMale ? 'bg-blue-50 text-blue-700' : 'bg-pink-50 text-pink-700'}`}>
+    <Card className="overflow-hidden hover:shadow-xl transition-all duration-300 border-0 bg-white dark:bg-slate-900">
+      {/* Header avec gradient bleu professionnel */}
+      <div className="bg-gradient-to-r from-blue-600 to-blue-500 px-6 py-4">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-4 flex-1">
+            <Avatar className="h-14 w-14 border-3 border-white shadow-lg">
+              <AvatarFallback className="bg-white text-blue-600 font-bold text-lg">
                 {enfant.prenom?.[0]}{enfant.nom?.[0]}
               </AvatarFallback>
             </Avatar>
-            <div>
-              <CardTitle className="text-lg">{enfant.prenom} {enfant.nom}</CardTitle>
-              <CardDescription className="flex items-center gap-1 mt-1">
-                <Calendar className="h-3 w-3" />
-                {calculateAge(enfant.dateNaissance)}
-              </CardDescription>
+            <div className="flex-1 text-white min-w-0">
+              <p className="font-bold text-lg leading-none">{enfant.prenom} {enfant.nom}</p>
+              <p className="text-sm text-blue-100 mt-1">
+                {calculateAge(enfant.dateNaissance)} • {isMale ? 'Garçon' : 'Fille'}
+              </p>
             </div>
           </div>
           
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 transition-opacity">
+              <Button variant="ghost" size="icon" className="text-white hover:bg-blue-700/50 h-8 w-8 flex-shrink-0">
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -136,7 +163,7 @@ function EnfantCard({ enfant, onView, onEdit, onDelete, onVaccinate, onViewCarne
               <DropdownMenuItem onClick={() => onVaccinate(enfant)} className="text-green-600">
                 <Syringe className="mr-2 h-4 w-4" /> Vacciner
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onViewCarnet(enfant)} className="text-purple-600">
+              <DropdownMenuItem onClick={() => onViewCarnet(enfant)} className="text-blue-600">
                 <BookOpen className="mr-2 h-4 w-4" /> Voir Carnet
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => onEdit(enfant)}>
@@ -149,149 +176,103 @@ function EnfantCard({ enfant, onView, onEdit, onDelete, onVaccinate, onViewCarne
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-      </CardHeader>
+      </div>
 
-      <CardContent className="space-y-4">
-        {/* QR Code Section */}
-        <div className="flex items-center justify-center p-4 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 rounded-xl border border-gray-200 dark:border-gray-700">
-          <div className="text-center space-y-2">
-            {enfant.qrCode ? (
-              <div className="relative">
-                <div className="p-3 bg-white rounded-lg shadow-sm inline-block">
-                  <QrCode className="h-20 w-20 text-gray-800" />
+      <CardContent className="p-6 space-y-5">
+        {/* Infos essentielles */}
+        <div className="space-y-3">
+          <p className="text-xs font-bold text-blue-700 uppercase tracking-widest">Infos</p>
+          
+          <div className="space-y-2">
+            {enfant.dateNaissance && (
+              <div className="flex items-center gap-3 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-100 dark:border-blue-800">
+                <Calendar className="h-4 w-4 text-blue-600 flex-shrink-0" />
+                <div>
+                  <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">Naissance</p>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                    {new Date(enfant.dateNaissance).toLocaleDateString('fr-FR')}
+                  </p>
                 </div>
-                {enfant.contenuQrCcode && (
-                  <a 
-                    href={enfant.contenuQrCcode} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="absolute -bottom-1 -right-1 p-1.5 bg-primary text-primary-foreground rounded-full shadow-lg hover:scale-110 transition-transform"
-                    title="Ouvrir le lien QR"
-                  >
-                    <ExternalLink className="h-3 w-3" />
-                  </a>
+              </div>
+            )}
+
+            {enfant.groupeSanguin && (
+              <div className="flex items-center gap-3 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-100 dark:border-blue-800">
+                <Droplets className="h-4 w-4 text-red-500 flex-shrink-0" />
+                <div>
+                  <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">Groupe sanguin</p>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                    {enfant.groupeSanguin}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {enfant.lieuNaissance && (
+              <div className="flex items-center gap-3 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-100 dark:border-blue-800">
+                <MapPin className="h-4 w-4 text-blue-600 flex-shrink-0" />
+                <div>
+                  <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">Lieu de naissance</p>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+                    {enfant.lieuNaissance}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {(enfant.poids || enfant.taille) && (
+              <div className="flex gap-2">
+                {enfant.poids && (
+                  <div className="flex-1 flex items-center gap-3 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-100 dark:border-blue-800">
+                    <Scale className="h-4 w-4 text-orange-500 flex-shrink-0" />
+                    <div>
+                      <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">Poids</p>
+                      <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                        {enfant.poids} kg
+                      </p>
+                    </div>
+                  </div>
+                )}
+                {enfant.taille && (
+                  <div className="flex-1 flex items-center gap-3 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-100 dark:border-blue-800">
+                    <Ruler className="h-4 w-4 text-green-500 flex-shrink-0" />
+                    <div>
+                      <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">Taille</p>
+                      <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                        {enfant.taille} cm
+                      </p>
+                    </div>
+                  </div>
                 )}
               </div>
-            ) : (
-              <div className="p-3 bg-gray-100 dark:bg-gray-700 rounded-lg inline-block">
-                <QrCode className="h-20 w-20 text-gray-400" />
-              </div>
             )}
-            <p className="text-xs text-muted-foreground font-medium">
-              {enfant.numeroCarnet || 'N° Carnet non défini'}
-            </p>
           </div>
+
         </div>
 
-        {/* Infos Grid */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="flex items-center gap-2 p-2 bg-muted/50 rounded-lg">
-            <Badge variant={isMale ? 'default' : 'secondary'} 
-                   className={`${isMale ? 'bg-blue-100 text-blue-700 hover:bg-blue-100' : 'bg-pink-100 text-pink-700 hover:bg-pink-100'}`}>
-              {isMale ? 'Garçon' : 'Fille'}
-            </Badge>
-          </div>
-          
-          {enfant.groupeSanguin && (
-            <div className="flex items-center gap-2 p-2 bg-muted/50 rounded-lg">
-              <Droplets className="h-4 w-4 text-red-500" />
-              <span className="text-sm font-medium">{enfant.groupeSanguin}</span>
-            </div>
-          )}
-          
-          {enfant.lieuNaissance && (
-            <div className="flex items-center gap-2 p-2 bg-muted/50 rounded-lg col-span-2">
-              <MapPin className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm truncate">{enfant.lieuNaissance}</span>
-            </div>
-          )}
-        </div>
+        {/* Separator */}
+        <div className="h-px bg-gradient-to-r from-transparent via-blue-200 to-transparent"></div>
 
-        {/* Infos Physiques */}
-        {(enfant.poids || enfant.taille) && (
-          <div className="flex items-center justify-center gap-4 py-2">
-            {enfant.poids && (
-              <div className="flex items-center gap-1.5 text-sm">
-                <Scale className="h-4 w-4 text-orange-500" />
-                <span className="font-medium">{enfant.poids} kg</span>
-              </div>
-            )}
-            {enfant.poids && enfant.taille && <Separator orientation="vertical" className="h-4" />}
-            {enfant.taille && (
-              <div className="flex items-center gap-1.5 text-sm">
-                <Ruler className="h-4 w-4 text-green-500" />
-                <span className="font-medium">{enfant.taille} cm</span>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Allergies Alert */}
-        {enfant.allergies && (
-          <div className="p-2 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 text-amber-600" />
-              <span className="text-xs font-medium text-amber-700 dark:text-amber-400">Allergies</span>
-            </div>
-            <p className="text-xs text-amber-600 dark:text-amber-500 mt-1 line-clamp-2">{enfant.allergies}</p>
-          </div>
-        )}
-
-        <Separator />
-
-        {/* Parent Info */}
-        {enfant.parent && (
-          <div className="flex items-center gap-3 p-2 bg-muted/30 rounded-lg">
-            <Avatar className="h-8 w-8">
-              <AvatarFallback className="text-xs bg-primary/10 text-primary">
-                {enfant.parent.prenom?.[0]}{enfant.parent.nom?.[0]}
-              </AvatarFallback>
-            </Avatar>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">
-                {enfant.parent.prenom} {enfant.parent.nom}
-              </p>
-              {enfant.parent.telephone && (
-                <p className="text-xs text-muted-foreground flex items-center gap-1">
-                  <Phone className="h-3 w-3" />
-                  {enfant.parent.telephone}
-                </p>
-              )}
-            </div>
-          </div>
-        )}
-      </CardContent>
-
-      <CardFooter className="pt-0 flex-col gap-2">
+        {/* Buttons */}
         <div className="flex w-full gap-2">
           <Button 
-            variant="outline" 
             size="sm"
-            className="flex-1" 
-            onClick={() => onView(enfant)}
+            className="flex-1 bg-white border border-blue-200 dark:border-blue-800 hover:bg-blue-50 text-blue-600 font-semibold shadow-md hover:shadow-lg transition-all"
+            onClick={() => onVaccinate(enfant)}
           >
-            <FileText className="mr-1.5 h-3.5 w-3.5" />
-            Dossier
+            <Syringe className="h-4 w-4 mr-2 text-blue-600" />
+            Vacciner
           </Button>
           <Button 
             size="sm"
-            className="flex-1 bg-green-600 hover:bg-green-700" 
-            onClick={() => onVaccinate(enfant)}
+            className="flex-1 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white font-semibold shadow-md hover:shadow-lg transition-all"
+            onClick={() => onViewCarnet(enfant)}
           >
-            <Syringe className="mr-1.5 h-3.5 w-3.5" />
-            Vacciner
+            <BookOpen className="h-4 w-4 mr-2" />
+            Carnet
           </Button>
         </div>
-        <Button 
-          variant="outline"
-          size="sm"
-          className="w-full border-purple-200 text-purple-700 hover:bg-purple-50 hover:text-purple-800 dark:border-purple-800 dark:text-purple-400 dark:hover:bg-purple-950/40" 
-          onClick={() => onViewCarnet(enfant)}
-        >
-          <BookOpen className="mr-1.5 h-3.5 w-3.5" />
-          Voir Carnet de Vaccination
-        </Button>
-      </CardFooter>
+      </CardContent>
     </Card>
   );
 }
@@ -341,6 +322,8 @@ export default function EnfantPage() {
   const createVaccinationMutation = useCreateVaccination();
   const { openModal, closeModal } = useModal();
   const { decodedToken } = useDecodedToken();
+  const normalizedRole = (decodedToken?.role || '').replace(/^ROLE_/, '').toUpperCase();
+  const isInfirmier = normalizedRole === 'INFIRMIER';
   
   // Récupérer l'utilisateur connecté via son email (depuis le token)
   const { data: currentUser } = useUserByEmail(decodedToken?.sub || '');
@@ -353,9 +336,26 @@ export default function EnfantPage() {
   const [selectedVaccinId, setSelectedVaccinId] = useState<string>('');
   const [selectedAppointmentId, setSelectedAppointmentId] = useState<string>('');
   const itemsPerPage = viewMode === 'grid' ? 8 : 10;
+  const currentCentreId = currentUser?.centre?.id != null ? Number(currentUser.centre.id) : null;
+  const ownedIds = useMemo(
+    () => readInfirmierOwnedIds(decodedToken?.sub),
+    [decodedToken?.sub, enfants, allUsers]
+  );
 
   // Récupérer uniquement les parents pour le formulaire de création
-  const parents = allUsers?.filter(user => user.userRole === 'PARENT') || [];
+  const parents = (allUsers || []).filter((user) => {
+    if (user.userRole !== 'PARENT') return false;
+    if (isInfirmier) {
+      if (ownedIds.parentIds.length > 0) {
+        return user.id != null && ownedIds.parentIds.includes(Number(user.id));
+      }
+      if (currentCentreId != null) {
+        return user.centre?.id != null && Number(user.centre.id) === currentCentreId;
+      }
+      return false;
+    }
+    return true;
+  });
 
   // Remettre à la page 1 quand les filtres changent
   useEffect(() => {
@@ -363,7 +363,18 @@ export default function EnfantPage() {
   }, [searchTerm, sexeFilter]);
 
   // Filtrage
-  const filteredEnfants = (enfants || []).filter(enfant => {
+  const scopedEnfants = (enfants || []).filter((enfant) => {
+    if (!isInfirmier) return true;
+    const enfantId = enfant.id != null ? Number(enfant.id) : null;
+    const parentId = enfant.parent?.id != null ? Number(enfant.parent.id) : null;
+    const visibleParentIds = parents.map((p) => Number(p.id)).filter((id) => Number.isFinite(id));
+    return (
+      (enfantId != null && ownedIds.enfantIds.includes(enfantId)) ||
+      (parentId != null && (ownedIds.parentIds.includes(parentId) || visibleParentIds.includes(parentId)))
+    );
+  });
+
+  const filteredEnfants = scopedEnfants.filter(enfant => {
     const matchesSearch = 
       enfant.nom?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       enfant.prenom?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -456,12 +467,13 @@ export default function EnfantPage() {
     }
     
     try {
-      await createVaccinationMutation.mutateAsync({
+      const createdVaccination = await createVaccinationMutation.mutateAsync({
         enfantId: selectedEnfant.id,
         vaccinId: parseInt(selectedVaccinId),
         appointmentId: parseInt(selectedAppointmentId),
         userId: currentUser.id
       });
+      addInfirmierOwnedId(decodedToken?.sub, 'vaccinationIds', createdVaccination?.id ?? null);
       
       toast.success("Vaccination enregistrée", {
         description: `${selectedEnfant.prenom} ${selectedEnfant.nom} a été vacciné(e) avec succès.`
@@ -514,76 +526,103 @@ export default function EnfantPage() {
   );
 
   return (
-    <PageContainer 
-      title="Gestion des Enfants" 
-      subtitle="Gérez les dossiers des enfants enregistrés dans le système de vaccination"
-    >
-      {/* Cartes statistiques */}
-      <div className="grid gap-4 md:grid-cols-4 mb-6">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Enfants</CardTitle>
-            <Baby className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats?.nombreTotalEnfants || enfants?.length || 0}</div>
-            <p className="text-xs text-muted-foreground">Enfants enregistrés</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Garçons</CardTitle>
-            <UserCircle className="h-4 w-4 text-blue-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-600">{stats?.nombreTotalGarcons || 0}</div>
-            <p className="text-xs text-muted-foreground">Sexe masculin</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Filles</CardTitle>
-            <UserCircle className="h-4 w-4 text-pink-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-pink-600">{stats?.nombreTotalFilles || 0}</div>
-            <p className="text-xs text-muted-foreground">Sexe féminin</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Parents</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{parents.length}</div>
-            <p className="text-xs text-muted-foreground">Parents enregistrés</p>
-          </CardContent>
-        </Card>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-950 dark:to-blue-950">
+      {/* Header Magnifique */}
+      <div className="bg-gradient-to-r from-blue-600 via-blue-500 to-blue-400 px-6 py-12 sm:px-8 lg:px-12 shadow-2xl">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <h1 className="text-4xl sm:text-5xl font-black text-white mb-3 drop-shadow-lg">
+                Gestion des Enfants
+              </h1>
+              <p className="text-lg text-blue-50 font-medium drop-shadow">
+                Gérez les dossiers de vaccination des enfants enregistrés
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
 
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-6 py-8 sm:px-8 lg:px-12">
+        {/* Cartes statistiques */}
+        <div className="grid gap-4 md:grid-cols-4 mb-8">
+          <Card className="group relative bg-gradient-to-br from-blue-50 to-white dark:from-blue-950/30 dark:to-slate-900 border-blue-200 dark:border-blue-800 hover:shadow-xl transition-all duration-300 overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-r from-blue-600/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
+              <CardTitle className="text-sm font-bold text-blue-700 dark:text-blue-400 uppercase tracking-widest">Total Enfants</CardTitle>
+              <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                <Baby className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              </div>
+            </CardHeader>
+            <CardContent className="relative z-10">
+              <div className="text-4xl font-black text-blue-700 dark:text-blue-300">{stats?.nombreTotalEnfants || enfants?.length || 0}</div>
+              <p className="text-xs text-blue-600/70 dark:text-blue-400/70 mt-2 font-medium">Enfants enregistrés</p>
+            </CardContent>
+          </Card>
+
+          <Card className="group relative bg-gradient-to-br from-blue-50 to-white dark:from-blue-950/30 dark:to-slate-900 border-blue-200 dark:border-blue-800 hover:shadow-xl transition-all duration-300 overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-r from-blue-600/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
+              <CardTitle className="text-sm font-bold text-blue-700 dark:text-blue-400 uppercase tracking-widest">Garçons</CardTitle>
+              <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                <UserCircle className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              </div>
+            </CardHeader>
+            <CardContent className="relative z-10">
+              <div className="text-4xl font-black text-blue-700 dark:text-blue-300">{stats?.nombreTotalGarcons || 0}</div>
+              <p className="text-xs text-blue-600/70 dark:text-blue-400/70 mt-2 font-medium">Sexe masculin</p>
+            </CardContent>
+          </Card>
+
+          <Card className="group relative bg-gradient-to-br from-pink-50 to-white dark:from-pink-950/30 dark:to-slate-900 border-pink-200 dark:border-pink-800 hover:shadow-xl transition-all duration-300 overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-r from-pink-600/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
+              <CardTitle className="text-sm font-bold text-pink-700 dark:text-pink-400 uppercase tracking-widest">Filles</CardTitle>
+              <div className="p-2 bg-pink-100 dark:bg-pink-900/30 rounded-lg">
+                <UserCircle className="h-5 w-5 text-pink-600 dark:text-pink-400" />
+              </div>
+            </CardHeader>
+            <CardContent className="relative z-10">
+              <div className="text-4xl font-black text-pink-700 dark:text-pink-300">{stats?.nombreTotalFilles || 0}</div>
+              <p className="text-xs text-pink-600/70 dark:text-pink-400/70 mt-2 font-medium">Sexe féminin</p>
+            </CardContent>
+          </Card>
+
+          <Card className="group relative bg-gradient-to-br from-blue-50 to-white dark:from-blue-950/30 dark:to-slate-900 border-blue-200 dark:border-blue-800 hover:shadow-xl transition-all duration-300 overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-r from-blue-600/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
+              <CardTitle className="text-sm font-bold text-blue-700 dark:text-blue-400 uppercase tracking-widest">Parents</CardTitle>
+              <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                <Users className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              </div>
+            </CardHeader>
+            <CardContent className="relative z-10">
+              <div className="text-4xl font-black text-blue-700 dark:text-blue-300">{parents.length}</div>
+              <p className="text-xs text-blue-600/70 dark:text-blue-400/70 mt-2 font-medium">Parents enregistrés</p>
+            </CardContent>
+          </Card>
+        </div>
+
       {/* Barre d'actions */}
-      <Card className="mb-6">
+      <Card className="mb-6 bg-white dark:bg-slate-900 border-blue-200 dark:border-blue-800">
         <CardContent className="pt-6">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             {/* Recherche */}
             <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-blue-500" />
               <Input
                 placeholder="Rechercher par nom, prénom, n° carnet ou parent..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
+                className="pl-10 border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200"
               />
             </div>
 
             {/* Filtres et actions */}
             <div className="flex flex-wrap gap-2">
               <Select value={sexeFilter} onValueChange={setSexeFilter}>
-                <SelectTrigger className="w-[140px]">
+                <SelectTrigger className="w-[140px] border-blue-200 dark:border-blue-800">
                   <SelectValue placeholder="Sexe" />
                 </SelectTrigger>
                 <SelectContent>
@@ -595,7 +634,7 @@ export default function EnfantPage() {
 
               {/* Toggle vue grille/liste */}
               <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'grid' | 'list')} className="hidden sm:block">
-                <TabsList className="h-9">
+                <TabsList className="h-9 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
                   <TabsTrigger value="grid" className="px-3">
                     <LayoutGrid className="h-4 w-4" />
                   </TabsTrigger>
@@ -605,15 +644,29 @@ export default function EnfantPage() {
                 </TabsList>
               </Tabs>
 
-              <Button variant="outline" size="icon" onClick={() => refetch()} title="Actualiser">
-                <RefreshCw className="h-4 w-4" />
+              <Button 
+                variant="outline" 
+                size="icon" 
+                onClick={() => refetch()} 
+                title="Actualiser"
+                className="border-blue-200 dark:border-blue-800 hover:bg-blue-50 dark:hover:bg-blue-950/30 hover:text-blue-600"
+              >
+                <RefreshCw className="h-4 w-4 text-blue-600" />
               </Button>
 
-              <Button variant="outline" size="icon" title="Exporter">
-                <Download className="h-4 w-4" />
+              <Button 
+                variant="outline" 
+                size="icon" 
+                title="Exporter"
+                className="border-blue-200 dark:border-blue-800 hover:bg-blue-50 dark:hover:bg-blue-950/30 hover:text-blue-600"
+              >
+                <Download className="h-4 w-4 text-blue-600" />
               </Button>
 
-              <Button onClick={() => openModal('add-enfant')}>
+              <Button 
+                onClick={() => openModal('add-enfant')}
+                className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white font-semibold shadow-md hover:shadow-lg transition-all"
+              >
                 <Plus className="mr-2 h-4 w-4" />
                 Ajouter un enfant
               </Button>
@@ -631,16 +684,6 @@ export default function EnfantPage() {
           </AlertDescription>
         </Alert>
       )}
-
-      {/* Header avec compteur */}
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h2 className="text-xl font-semibold">Liste des Enfants</h2>
-          <p className="text-sm text-muted-foreground">
-            {filteredEnfants.length} enfant(s) trouvé(s)
-          </p>
-        </div>
-      </div>
 
       {/* Vue Grille */}
       {viewMode === 'grid' && (
@@ -660,7 +703,11 @@ export default function EnfantPage() {
                 <div>
                   <h3 className="text-lg font-medium">Aucun enfant trouvé</h3>
                   <p className="text-sm text-muted-foreground mt-1">
-                    {searchTerm ? 'Essayez de modifier votre recherche' : 'Commencez par ajouter un enfant'}
+                    {searchTerm
+                      ? 'Essayez de modifier votre recherche'
+                      : isInfirmier
+                        ? 'Aucun enfant n’a été créé pour le moment sur votre espace'
+                        : 'Commencez par ajouter un enfant'}
                   </p>
                 </div>
                 {searchTerm ? (
@@ -918,7 +965,8 @@ export default function EnfantPage() {
 
       {/* Modal Carnet de Vaccination */}
       <CarnetVaccinationModal enfant={selectedEnfant} />
-    </PageContainer>
+      </div>
+    </div>
   );
 }
 
@@ -934,6 +982,7 @@ interface AddEnfantModalProps {
 
 function AddEnfantModal({ parents, onSuccess }: AddEnfantModalProps) {
   const { isModalOpen, closeModal } = useModal();
+  const { decodedToken } = useDecodedToken();
   const [selectedParentId, setSelectedParentId] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -996,7 +1045,8 @@ function AddEnfantModal({ parents, onSuccess }: AddEnfantModalProps) {
 
     setIsSubmitting(true);
     try {
-      await createEnfantMutation.mutateAsync({ ...formData, parentId: selectedParentId });
+      const createdEnfant = await createEnfantMutation.mutateAsync({ ...formData, parentId: selectedParentId });
+      addInfirmierOwnedId(decodedToken?.sub, 'enfantIds', createdEnfant?.id ?? null);
       toast.success("Enfant créé", {
         description: `${formData.prenom} ${formData.nom} a été enregistré avec succès.`
       });
@@ -1641,26 +1691,26 @@ function VaccinationModal({
       showFooter={false}
     >
       <div className="space-y-6">
-        {/* Info enfant */}
-        <div className="p-4 bg-muted/50 rounded-lg border">
+        {/* Info enfant - Header bleu professionnel */}
+        <div className="bg-gradient-to-r from-blue-600 to-blue-500 px-6 py-4 -mx-6 -mt-6">
           <div className="flex items-center gap-4">
-            <Avatar className={`h-14 w-14 border-2 ${enfant?.sexe === 'MASCULIN' ? 'border-blue-200' : 'border-pink-200'}`}>
-              <AvatarFallback className={enfant?.sexe === 'MASCULIN' ? 'bg-blue-50 text-blue-700' : 'bg-pink-50 text-pink-700'}>
+            <Avatar className="h-14 w-14 border-3 border-white shadow-lg">
+              <AvatarFallback className="bg-white text-blue-600 font-bold text-lg">
                 {enfant?.prenom?.[0]}{enfant?.nom?.[0]}
               </AvatarFallback>
             </Avatar>
-            <div>
-              <h4 className="font-semibold">{enfant?.prenom} {enfant?.nom}</h4>
-              <p className="text-sm text-muted-foreground flex items-center gap-2">
+            <div className="text-white flex-1">
+              <h4 className="font-bold text-lg">{enfant?.prenom} {enfant?.nom}</h4>
+              <p className="text-sm text-blue-100 mt-1 flex items-center gap-2">
                 <Calendar className="h-3 w-3" />
                 {calculateAge(enfant?.dateNaissance)}
                 <span className="mx-1">•</span>
-                <Badge variant="outline" className={enfant?.sexe === 'MASCULIN' ? 'bg-blue-50 text-blue-700' : 'bg-pink-50 text-pink-700'}>
+                <Badge className={`${enfant?.sexe === 'MASCULIN' ? 'bg-blue-400' : 'bg-pink-400'} text-white`}>
                   {enfant?.sexe === 'MASCULIN' ? 'Garçon' : 'Fille'}
                 </Badge>
               </p>
               {enfant?.numeroCarnet && (
-                <p className="text-xs text-muted-foreground mt-1">
+                <p className="text-xs text-blue-100 mt-1">
                   N° Carnet: {enfant.numeroCarnet}
                 </p>
               )}
@@ -1670,13 +1720,13 @@ function VaccinationModal({
 
         {/* Sélection du rendez-vous */}
         <div className="space-y-2">
-          <Label htmlFor="appointment-select" className="text-base font-medium">
-            Sélectionner le rendez-vous <span className="text-red-500">*</span>
+          <Label htmlFor="appointment-select" className="text-base font-semibold text-blue-700">
+            Rendez-vous <span className="text-red-500">*</span>
           </Label>
           {loadingAppointments ? (
-            <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span className="text-sm">Chargement des rendez-vous...</span>
+            <div className="flex items-center gap-2 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-100 dark:border-blue-800">
+              <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+              <span className="text-sm text-blue-700">Chargement des rendez-vous...</span>
             </div>
           ) : pendingAppointments.length === 0 ? (
             <Alert className="border-amber-200 bg-amber-50">
@@ -1687,7 +1737,7 @@ function VaccinationModal({
             </Alert>
           ) : (
             <Select value={selectedAppointmentId} onValueChange={setSelectedAppointmentId}>
-              <SelectTrigger id="appointment-select" className="w-full">
+              <SelectTrigger id="appointment-select" className="w-full border-blue-200 dark:border-blue-800">
                 <SelectValue placeholder="Choisir un rendez-vous..." />
               </SelectTrigger>
               <SelectContent>
@@ -1713,11 +1763,11 @@ function VaccinationModal({
 
         {/* Sélection du vaccin */}
         <div className="space-y-2">
-          <Label htmlFor="vaccin-select" className="text-base font-medium">
-            Sélectionner le vaccin <span className="text-red-500">*</span>
+          <Label htmlFor="vaccin-select" className="text-base font-semibold text-blue-700">
+            Vaccin <span className="text-red-500">*</span>
           </Label>
           <Select value={selectedVaccinId} onValueChange={setSelectedVaccinId}>
-            <SelectTrigger id="vaccin-select" className="w-full">
+            <SelectTrigger id="vaccin-select" className="w-full border-blue-200 dark:border-blue-800">
               <SelectValue placeholder="Choisir un vaccin..." />
             </SelectTrigger>
             <SelectContent>
@@ -1743,24 +1793,28 @@ function VaccinationModal({
           <Alert className="border-amber-200 bg-amber-50">
             <AlertCircle className="h-4 w-4 text-amber-600" />
             <AlertDescription className="text-amber-700">
-              <strong>Attention - Allergies:</strong> {enfant.allergies}
+              <strong>⚠️ Allergies:</strong> {enfant.allergies}
             </AlertDescription>
           </Alert>
         )}
 
         {/* Actions */}
-        <div className="flex justify-end gap-3 pt-4 border-t">
-          <Button variant="outline" onClick={() => closeModal('vaccinate-enfant')}>
+        <div className="flex justify-end gap-3 pt-4 border-t border-blue-200 dark:border-blue-800">
+          <Button 
+            variant="outline" 
+            onClick={() => closeModal('vaccinate-enfant')}
+            className="border-blue-200 dark:border-blue-800"
+          >
             Annuler
           </Button>
           <Button 
             onClick={onConfirm}
             disabled={!selectedVaccinId || !selectedAppointmentId || isPending || pendingAppointments.length === 0}
-            className="bg-green-600 hover:bg-green-700"
+            className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white font-semibold shadow-md hover:shadow-lg transition-all"
           >
             {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             <Syringe className="mr-2 h-4 w-4" />
-            Confirmer la vaccination
+            Confirmer
           </Button>
         </div>
       </div>

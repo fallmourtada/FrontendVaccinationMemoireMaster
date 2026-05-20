@@ -466,22 +466,22 @@ function CalendrierContent() {
   const getStatutBadge = (statut: string) => {
     switch (statut) {
       case 'confirme':
-        return <Badge className="bg-emerald-500 text-white"><CheckCircle2 className="w-3 h-3 mr-1" />Confirmé</Badge>;
+        return <Badge className="bg-blue-600 text-white"><CheckCircle2 className="w-3 h-3 mr-1" />Confirmé</Badge>;
       case 'en_attente':
-        return <Badge variant="outline" className="text-orange-600 border-orange-600"><Clock className="w-3 h-3 mr-1" />En attente</Badge>;
+        return <Badge className="bg-blue-500 text-white"><Clock className="w-3 h-3 mr-1" />En attente</Badge>;
       case 'reporte':
-        return <Badge variant="outline" className="text-blue-600 border-blue-600">Reporté</Badge>;
+        return <Badge className="bg-blue-700 text-white">Reporté</Badge>;
       case 'annule':
-        return <Badge variant="destructive"><XCircle className="w-3 h-3 mr-1" />Annulé</Badge>;
+        return <Badge className="bg-slate-400 text-white"><XCircle className="w-3 h-3 mr-1" />Annulé</Badge>;
       default:
-        return <Badge variant="outline">{statut}</Badge>;
+        return <Badge className="bg-blue-600 text-white">{statut}</Badge>;
     }
   };
 
   const getVaccinBadge = (obligatoire: boolean) => {
     return obligatoire 
-      ? <Badge className="bg-red-500 text-white">Obligatoire</Badge>
-      : <Badge variant="outline" className="text-blue-600 border-blue-600">Recommandé</Badge>;
+      ? <Badge className="bg-blue-600 text-white">Obligatoire</Badge>
+      : <Badge className="bg-blue-500 text-white">Recommandé</Badge>;
   };
 
   const handleVaccinAction = (action: string, vaccin: Vaccin) => {
@@ -527,38 +527,36 @@ function CalendrierContent() {
     setCurrentPage: (page: number) => void, 
     totalPages: number
   ) => (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            {icon}
-            <span>{title}</span>
+    <Card className="border-0 shadow-md dark:bg-slate-900 overflow-hidden">
+      <div className="bg-gradient-to-r from-blue-600 to-blue-500 px-6 py-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <div className="text-white">{icon}</div>
+            <h3 className="text-white font-bold text-lg">{title}</h3>
           </div>
-          <Button size="sm" onClick={() => handleVaccinAction('create', {} as Vaccin)}>
+          <Button size="sm" onClick={() => handleVaccinAction('create', {} as Vaccin)} className="bg-white text-blue-600 hover:bg-blue-50 font-semibold shadow-md">
             <Plus className="w-4 h-4 mr-2" />
             Nouveau vaccin
           </Button>
-        </CardTitle>
-        <CardDescription>
-          Gérez les vaccins pour cette catégorie de population
-        </CardDescription>
-
+        </div>
+      </div>
+      <CardContent className="p-6">
         {/* Filtres pour les vaccins */}
-        <div className="flex flex-col lg:flex-row gap-4 pt-4">
+        <div className="flex flex-col lg:flex-row gap-4 mb-6">
           <div className="flex-1">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-blue-400" />
               <Input
                 placeholder="Rechercher un vaccin..."
                 value={searchTermVaccins}
                 onChange={(e) => setSearchTermVaccins(e.target.value)}
-                className="pl-10"
+                className="pl-10 border-blue-200 focus:border-blue-500 focus:ring-blue-300 dark:border-blue-800 dark:bg-slate-800 dark:text-white"
               />
             </div>
           </div>
           
           <Select value={statutFilterVaccins} onValueChange={setStatutFilterVaccins}>
-            <SelectTrigger className="w-full lg:w-48">
+            <SelectTrigger className="w-full lg:w-48 border-blue-200 focus:border-blue-500 focus:ring-blue-300 dark:border-blue-800 dark:bg-slate-800 dark:text-white">
               <SelectValue placeholder="Type de vaccin" />
             </SelectTrigger>
             <SelectContent>
@@ -568,17 +566,16 @@ function CalendrierContent() {
             </SelectContent>
           </Select>
         </div>
-      </CardHeader>
-      <CardContent className="p-0">
+        
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
-              <TableRow className="border-b border-border/40 bg-muted/30">
-                <TableHead className="h-12 px-6 text-left align-middle font-semibold">Vaccin</TableHead>
-                <TableHead className="h-12 px-4 text-left align-middle font-semibold">Âge recommandé</TableHead>
-                <TableHead className="h-12 px-4 text-left align-middle font-semibold">Statut</TableHead>
-                <TableHead className="h-12 px-4 text-left align-middle font-semibold">Rappels</TableHead>
-                <TableHead className="h-12 px-4 text-center align-middle font-semibold">Actions</TableHead>
+              <TableRow className="border-b-2 border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20">
+                <TableHead className="h-12 px-6 text-left align-middle font-bold text-blue-700 dark:text-blue-300">Vaccin</TableHead>
+                <TableHead className="h-12 px-4 text-left align-middle font-bold text-blue-700 dark:text-blue-300">Âge recommandé</TableHead>
+                <TableHead className="h-12 px-4 text-left align-middle font-bold text-blue-700 dark:text-blue-300">Statut</TableHead>
+                <TableHead className="h-12 px-4 text-left align-middle font-bold text-blue-700 dark:text-blue-300">Rappels</TableHead>
+                <TableHead className="h-12 px-4 text-center align-middle font-bold text-blue-700 dark:text-blue-300">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -586,14 +583,14 @@ function CalendrierContent() {
                 <TableRow 
                   key={vaccin.id}
                   className={`
-                    border-b border-border/20 transition-all duration-200 hover:bg-muted/30
-                    ${index % 2 === 0 ? 'bg-background' : 'bg-muted/10'}
+                    border-b border-blue-100 dark:border-blue-800/50 transition-all duration-200 hover:bg-blue-50 dark:hover:bg-blue-900/10
+                    ${index % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-blue-50/30 dark:bg-slate-800/20'}
                   `}
                 >
                   <TableCell className="px-6 py-4">
                     <div className="flex items-center space-x-3">
-                      <div className="p-2 rounded-lg bg-primary/10">
-                        <Syringe className="w-4 h-4 text-primary" />
+                      <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30">
+                        <Syringe className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                       </div>
                       <div>
                         <div className="font-semibold text-foreground">{vaccin.nom}</div>
@@ -727,20 +724,20 @@ function CalendrierContent() {
       subtitle="Consultez le calendrier des vaccins et gérez vos créneaux de vaccination"
     >
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="vaccins-enfants" className="flex items-center space-x-2">
+        <TabsList className="grid w-full grid-cols-4 bg-blue-100 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800">
+          <TabsTrigger value="vaccins-enfants" className="flex items-center space-x-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-blue-500 data-[state=active]:text-white">
             <Baby className="w-4 h-4" />
             <span>Enfants</span>
           </TabsTrigger>
-          <TabsTrigger value="vaccins-femmes-enceintes" className="flex items-center space-x-2">
+          <TabsTrigger value="vaccins-femmes-enceintes" className="flex items-center space-x-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-blue-500 data-[state=active]:text-white">
             <Users className="w-4 h-4" />
             <span>Femmes enceintes</span>
           </TabsTrigger>
-          <TabsTrigger value="vaccins-femmes-post" className="flex items-center space-x-2">
+          <TabsTrigger value="vaccins-femmes-post" className="flex items-center space-x-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-blue-500 data-[state=active]:text-white">
             <Users className="w-4 h-4" />
             <span>Post-accouchement</span>
           </TabsTrigger>
-          <TabsTrigger value="rendez-vous" className="flex items-center space-x-2">
+          <TabsTrigger value="rendez-vous" className="flex items-center space-x-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-blue-500 data-[state=active]:text-white">
             <CalendarDays className="w-4 h-4" />
             <span>Rendez-vous</span>
           </TabsTrigger>
@@ -751,7 +748,7 @@ function CalendrierContent() {
           {renderVaccinTable(
             paginatedVaccinsEnfants, 
             "Calendrier vaccinal - De la naissance à l'adolescence",
-            <Baby className="w-5 h-5 text-blue-600" />,
+            <Baby className="w-5 h-5 text-white" />,
             currentPageEnfants,
             setCurrentPageEnfants,
             totalPagesEnfants
@@ -763,7 +760,7 @@ function CalendrierContent() {
           {renderVaccinTable(
             paginatedVaccinsFemmesEnceintes, 
             "Vaccins pour femmes enceintes",
-            <Users className="w-5 h-5 text-pink-600" />,
+            <Users className="w-5 h-5 text-white" />,
             currentPageFemmesEnceintes,
             setCurrentPageFemmesEnceintes,
             totalPagesFemmesEnceintes
@@ -775,7 +772,7 @@ function CalendrierContent() {
           {renderVaccinTable(
             paginatedVaccinsFemmesPost, 
             "Vaccins pour femmes après accouchement",
-            <Users className="w-5 h-5 text-purple-600" />,
+            <Users className="w-5 h-5 text-white" />,
             currentPageFemmesPost,
             setCurrentPageFemmesPost,
             totalPagesFemmesPost
@@ -784,32 +781,34 @@ function CalendrierContent() {
 
         {/* Onglet Rendez-vous */}
         <TabsContent value="rendez-vous" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <CalendarDays className="w-5 h-5 text-blue-600" />
-                  <span>Rendez-vous planifiés</span>
+          <Card className="border-0 shadow-md dark:bg-slate-900 overflow-hidden">
+            <div className="bg-gradient-to-r from-blue-600 to-blue-500 px-6 py-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <CalendarDays className="w-5 h-5 text-white" />
+                  <h3 className="text-white font-bold text-lg">Rendez-vous planifiés</h3>
                 </div>
-                <Button size="sm" onClick={() => openModal('create-rendez-vous')}>
+                <Button size="sm" onClick={() => openModal('create-rendez-vous')} className="bg-white text-blue-600 hover:bg-blue-50 font-semibold shadow-md">
                   <Plus className="w-4 h-4 mr-2" />
                   Nouveau RDV
                 </Button>
-              </CardTitle>
-              <CardDescription>
+              </div>
+            </div>
+            <CardContent className="p-6">
+              <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
                 Liste des rendez-vous de vaccination programmés
-              </CardDescription>
+              </p>
 
               {/* Filtres pour les rendez-vous */}
-              <div className="flex flex-col lg:flex-row gap-4 pt-4">
+              <div className="flex flex-col lg:flex-row gap-4 mb-6">
                 <div className="flex-1">
                   <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-blue-400" />
                     <Input
                       placeholder="Rechercher par patient ou vaccin..."
                       value={searchTermRendezVous}
                       onChange={(e) => setSearchTermRendezVous(e.target.value)}
-                      className="pl-10"
+                      className="pl-10 border-blue-200 focus:border-blue-500 focus:ring-blue-300 dark:border-blue-800 dark:bg-slate-800 dark:text-white"
                     />
                   </div>
                 </div>
@@ -827,18 +826,18 @@ function CalendrierContent() {
                   </SelectContent>
                 </Select>
               </div>
-            </CardHeader>
-            <CardContent className="p-0">
+            </CardContent>
+            <CardContent className="p-0 border-t border-blue-100 dark:border-blue-800/50">
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
-                    <TableRow className="border-b border-border/40 bg-muted/30">
-                      <TableHead className="h-12 px-6 text-left align-middle font-semibold">Patient</TableHead>
-                      <TableHead className="h-12 px-4 text-left align-middle font-semibold">Contact</TableHead>
-                      <TableHead className="h-12 px-4 text-left align-middle font-semibold">Rendez-vous</TableHead>
-                      <TableHead className="h-12 px-4 text-left align-middle font-semibold">Vaccin</TableHead>
-                      <TableHead className="h-12 px-4 text-left align-middle font-semibold">Statut</TableHead>
-                      <TableHead className="h-12 px-4 text-center align-middle font-semibold">Actions</TableHead>
+                    <TableRow className="border-b-2 border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20">
+                      <TableHead className="h-12 px-6 text-left align-middle font-bold text-blue-700 dark:text-blue-300">Patient</TableHead>
+                      <TableHead className="h-12 px-4 text-left align-middle font-bold text-blue-700 dark:text-blue-300">Contact</TableHead>
+                      <TableHead className="h-12 px-4 text-left align-middle font-bold text-blue-700 dark:text-blue-300">Rendez-vous</TableHead>
+                      <TableHead className="h-12 px-4 text-left align-middle font-bold text-blue-700 dark:text-blue-300">Vaccin</TableHead>
+                      <TableHead className="h-12 px-4 text-left align-middle font-bold text-blue-700 dark:text-blue-300">Statut</TableHead>
+                      <TableHead className="h-12 px-4 text-center align-middle font-bold text-blue-700 dark:text-blue-300">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -846,8 +845,8 @@ function CalendrierContent() {
                       <TableRow 
                         key={rdv.id}
                         className={`
-                          border-b border-border/20 transition-all duration-200 hover:bg-muted/30
-                          ${index % 2 === 0 ? 'bg-background' : 'bg-muted/10'}
+                          border-b border-blue-100 dark:border-blue-800/50 transition-all duration-200 hover:bg-blue-50 dark:hover:bg-blue-900/10
+                          ${index % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-blue-50/30 dark:bg-slate-800/20'}
                         `}
                       >
                         <TableCell className="px-6 py-4">

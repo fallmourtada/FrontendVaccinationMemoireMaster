@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, type ReactNode } from "react";
+import { jwtDecode } from "jwt-decode";
 import type { DecodedToken } from "@/types";
 
 // === Type du contexte ===
@@ -17,7 +18,15 @@ type DecodedTokenProviderProps = {
 
 // === Provider ===
 export const DecodedTokenProvider = ({ children }: DecodedTokenProviderProps) => {
-  const [decodedToken, setDecodedToken] = useState<DecodedToken | null>(null);
+  const [decodedToken, setDecodedToken] = useState<DecodedToken | null>(() => {
+    try {
+      const token = localStorage.getItem("authToken");
+      if (!token) return null;
+      return jwtDecode<DecodedToken>(token);
+    } catch {
+      return null;
+    }
+  });
 
   return (
     <DecodedTokenContext.Provider value={{ decodedToken, setDecodedToken }}>

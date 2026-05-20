@@ -7,3 +7,6 @@ export { CreateRendezVousModal } from './create-rendez-vous-modal';
 export { CreatePatientModal } from './create-patient-modal';
 export { DetailPatientModal } from './detail-patient-modal';
 export { DeleteModal } from './delete-modal';
+export { ChatbotModal } from './chatbot-modal';
+export { default as ChatbotAudioComponent } from './chatbot-audio-modal';
+

@@ -38,7 +38,6 @@ const routeMap: Record<string, { label: string; icon: React.ComponentType<{ clas
   "/medecin/patients": { label: "Patients", icon: Users },
   "/medecin/vaccinations": { label: "Vaccinations", icon: Heart },
   "/medecin/calendrier": { label: "Calendrier", icon: Calendar },
-  "/medecin/centres": { label: "Centres", icon: MapPin },
   "/medecin/stocks": { label: "Stock vaccins", icon: Package },
   "/medecin/statistiques": { label: "Statistiques", icon: BarChart3 },
   "/medecin/rapports": { label: "Rapports", icon: FileText },

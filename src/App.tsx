@@ -3,6 +3,10 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import AdminRouter from "./pages/admin/admin-router";
 import LandingPage from "./pages/landing-page";
 import LoginPage from "./pages/login-page";
+import ChatbotPage from "./pages/chatbot-page";
+import ChatbotAudioPage from "./pages/chatbot-audio-page";
+import TranscriptionTestPage from "./pages/transcription-test-page";
+import TestAudioPage from "./pages/test-audio-page";
 import { Toaster } from "@/components/ui/sonner";
 import { DecodedTokenProvider } from "./contexts/decoded-token-context";
 import { UserProvider } from "./contexts/user-context";
@@ -29,6 +33,18 @@ function App() {
 
               {/* Page de connexion */}
               <Route path="/login" element={<LoginPage />} />
+
+              {/* Page Chatbot */}
+              <Route path="/chatbot" element={<ChatbotPage />} />
+
+              {/* Page Chatbot Audio */}
+              <Route path="/chatbot-audio" element={<ChatbotAudioPage />} />
+
+              {/* Page Test Audio */}
+              <Route path="/test-audio" element={<TestAudioPage />} />
+
+              {/* Page de test transcription */}
+              <Route path="/transcription-test" element={<TranscriptionTestPage />} />
 
               {/* Routes medecin */}
               <Route path="/medecin/*" element={<MedecinRouter />}/>

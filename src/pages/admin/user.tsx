@@ -35,13 +35,34 @@ import {
   Building2,
   Phone,
   Mail,
-  Loader2
+  Loader2,
+  Power,
+  ShieldCheck,
+  ShieldOff
 } from "lucide-react";
 import type { UtilisateurDTO, SaveInfirmierDTO, UpdateUtilisateurDTO, UserRoleEnum } from "@/types";
 import { UserRole, GroupeSanguinValues } from "@/types";
 import { useModal } from "@/components/shared/modal-provider";
 import { BaseModal } from "@/components/shared/base-modal";
 import { toast } from "sonner";
+
+type UserStatusMap = Record<string, boolean>;
+const USER_STATUS_STORAGE_KEY = "platform-user-status-map";
+
+const readUserStatusMap = (): UserStatusMap => {
+  try {
+    const raw = localStorage.getItem(USER_STATUS_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as UserStatusMap;
+    return typeof parsed === "object" && parsed !== null ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+
+const writeUserStatusMap = (map: UserStatusMap) => {
+  localStorage.setItem(USER_STATUS_STORAGE_KEY, JSON.stringify(map));
+};
 
 export default function UserPage() {
   const { data: users, isLoading, isError, error, refetch } = useAllUsers();
@@ -50,6 +71,30 @@ export default function UserPage() {
   
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedUser, setSelectedUser] = useState<UtilisateurDTO | null>(null);
+  const [userStatusMap, setUserStatusMap] = useState<UserStatusMap>({});
+
+  useEffect(() => {
+    setUserStatusMap(readUserStatusMap());
+  }, []);
+
+  const isUserActive = (user: UtilisateurDTO) => {
+    const id = user.id != null ? String(user.id) : "";
+    if (!id) return true;
+    if (id in userStatusMap) return !!userStatusMap[id];
+    return true;
+  };
+
+  const toggleUserStatus = (user: UtilisateurDTO) => {
+    if (user.id == null) return;
+    const id = String(user.id);
+    const currentlyActive = isUserActive(user);
+    const next = { ...userStatusMap, [id]: !currentlyActive };
+    setUserStatusMap(next);
+    writeUserStatusMap(next);
+    toast.success(!currentlyActive ? "Utilisateur activé" : "Utilisateur désactivé", {
+      description: `${user.prenom} ${user.nom} est maintenant ${!currentlyActive ? "actif" : "inactif"} sur la plateforme.`,
+    });
+  };
 
   // Filtrer les utilisateurs par recherche
   const filteredUsers = users?.filter((user: UtilisateurDTO) => {
@@ -62,6 +107,9 @@ export default function UserPage() {
       user.userRole?.toLowerCase().includes(search)
     );
   });
+
+  const activeUsersCount = (users || []).filter((u) => isUserActive(u)).length;
+  const inactiveUsersCount = Math.max(0, (users || []).length - activeUsersCount);
 
   // Actions
   const handleViewDetails = (user: UtilisateurDTO) => {
@@ -108,55 +156,55 @@ export default function UserPage() {
       <div className="space-y-6">
         {/* Header avec statistiques */}
         <div className="grid gap-4 md:grid-cols-4">
-          <Card className="border-l-4 border-l-primary">
+          <Card className="border border-blue-100 bg-gradient-to-br from-blue-50 to-white shadow-sm">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Utilisateurs</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-bold text-blue-700">Total Utilisateurs</CardTitle>
+              <Users className="h-4 w-4 text-blue-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-primary">{users?.length || 0}</div>
+              <div className="text-2xl font-black text-blue-700">{users?.length || 0}</div>
             </CardContent>
           </Card>
           
-          <Card className="border-l-4 border-l-blue-500">
+          <Card className="border border-blue-100 bg-gradient-to-br from-blue-50 to-white shadow-sm">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">ICP</CardTitle>
-              <Building2 className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-bold text-blue-700">ICP</CardTitle>
+              <Building2 className="h-4 w-4 text-blue-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-blue-600">
+              <div className="text-2xl font-black text-blue-700">
                 {users?.filter((u: UtilisateurDTO) => u.userRole === 'ICP').length || 0}
               </div>
             </CardContent>
           </Card>
           
-          <Card className="border-l-4 border-l-green-500">
+          <Card className="border border-blue-100 bg-gradient-to-br from-blue-50 to-white shadow-sm">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Infirmiers</CardTitle>
-              <UserPlus className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-bold text-blue-700">Utilisateurs Actifs</CardTitle>
+              <ShieldCheck className="h-4 w-4 text-blue-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-600">
-                {users?.filter((u: UtilisateurDTO) => u.userRole === 'INFIRMIER').length || 0}
+              <div className="text-2xl font-black text-blue-700">
+                {activeUsersCount}
               </div>
             </CardContent>
           </Card>
           
-          <Card className="border-l-4 border-l-orange-500">
+          <Card className="border border-blue-100 bg-gradient-to-br from-blue-50 to-white shadow-sm">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Parents</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-bold text-blue-700">Utilisateurs Inactifs</CardTitle>
+              <ShieldOff className="h-4 w-4 text-blue-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-orange-600">
-                {users?.filter((u: UtilisateurDTO) => u.userRole === 'PARENT').length || 0}
+              <div className="text-2xl font-black text-blue-700">
+                {inactiveUsersCount}
               </div>
             </CardContent>
           </Card>
         </div>
 
         {/* Barre d'actions */}
-        <Card>
+        <Card className="border-blue-100 shadow-sm">
           <CardHeader className="pb-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
@@ -170,7 +218,7 @@ export default function UserPage() {
               </div>
               
               <div className="flex flex-wrap items-center gap-2">
-                <Button onClick={handleAddUser} className="gap-2">
+                <Button onClick={handleAddUser} className="gap-2 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600">
                   <Plus className="h-4 w-4" />
                   Ajouter
                 </Button>
@@ -196,7 +244,7 @@ export default function UserPage() {
                   className="pl-10"
                 />
               </div>
-              <Button variant="outline" className="gap-2">
+              <Button variant="outline" className="gap-2 border-blue-200 text-blue-700 hover:bg-blue-50">
                 <Filter className="h-4 w-4" />
                 Filtres
               </Button>
@@ -230,21 +278,22 @@ export default function UserPage() {
 
             {/* Tableau des utilisateurs */}
             {!isLoading && !isError && filteredUsers && (
-              <div className="rounded-lg border overflow-hidden">
+              <div className="rounded-xl border border-blue-100 overflow-hidden">
                 <Table>
                   <TableHeader>
-                    <TableRow className="bg-muted/50">
-                      <TableHead className="font-semibold">Utilisateur</TableHead>
-                      <TableHead className="font-semibold">Contact</TableHead>
-                      <TableHead className="font-semibold">Rôle</TableHead>
-                      <TableHead className="font-semibold">Centre</TableHead>
+                    <TableRow className="bg-blue-50/80">
+                      <TableHead className="font-semibold text-blue-700">Utilisateur</TableHead>
+                      <TableHead className="font-semibold text-blue-700">Contact</TableHead>
+                      <TableHead className="font-semibold text-blue-700">Rôle</TableHead>
+                      <TableHead className="font-semibold text-blue-700">Statut</TableHead>
+                      <TableHead className="font-semibold text-blue-700">Centre</TableHead>
                       <TableHead className="text-right font-semibold">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredUsers.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="text-center py-12">
+                        <TableCell colSpan={6} className="text-center py-12">
                           <div className="flex flex-col items-center gap-2 text-muted-foreground">
                             <Users className="h-12 w-12 opacity-20" />
                             <p className="font-medium">Aucun utilisateur trouvé</p>
@@ -256,7 +305,7 @@ export default function UserPage() {
                       </TableRow>
                     ) : (
                       filteredUsers.map((user: UtilisateurDTO) => (
-                        <TableRow key={user.id} className="hover:bg-muted/30 transition-colors">
+                        <TableRow key={user.id} className="hover:bg-blue-50/40 transition-colors">
                           <TableCell>
                             <div className="flex items-center gap-3">
                               <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
@@ -290,6 +339,18 @@ export default function UserPage() {
                             </Badge>
                           </TableCell>
                           <TableCell>
+                            <Badge
+                              variant="outline"
+                              className={
+                                isUserActive(user)
+                                  ? "border-blue-200 bg-blue-50 text-blue-700"
+                                  : "border-slate-300 bg-slate-100 text-slate-600"
+                              }
+                            >
+                              {isUserActive(user) ? "Actif" : "Inactif"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
                             <div className="max-w-[200px]">
                               {user.centre ? (
                                 <div>
@@ -319,6 +380,10 @@ export default function UserPage() {
                                 <DropdownMenuItem onClick={() => handleEdit(user)} className="gap-2">
                                   <Pencil className="h-4 w-4" />
                                   Modifier
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => toggleUserStatus(user)} className="gap-2">
+                                  <Power className="h-4 w-4" />
+                                  {isUserActive(user) ? "Désactiver" : "Activer"}
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem 

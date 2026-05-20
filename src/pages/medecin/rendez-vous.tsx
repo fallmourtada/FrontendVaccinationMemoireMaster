@@ -1,21 +1,12 @@
-import { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useMemo, useState } from 'react';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import {
   Dialog,
   DialogContent,
@@ -24,231 +15,64 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { 
-  CalendarDays, 
   Plus, 
-  Syringe,
+  AlertCircle,
+  Loader2,
+  Calendar,
+  Search,
   Clock,
   CheckCircle2,
-  XCircle,
-  Phone,
-  Edit,
-  Trash2,
-  Eye,
-  Search,
   RefreshCw,
-  Loader2,
-  AlertCircle,
-  Calendar,
-  User,
-  Baby,
-  AlertTriangle,
-  LayoutGrid,
-  List
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import PageContainer from "@/components/shared/page-container";
 import { toast } from 'sonner';
+import { RendezVousCarnetModal } from '@/components/modals/rendez-vous-carnet-modal';
 import { 
   useAllAppointments, 
-  useCreateAppointment, 
-  useUpdateAppointment, 
-  useDeleteAppointment,
-  useUpdateAppointmentStatus
+  useCreateAppointment,
 } from '@/services/appointment.service';
+import { useAllVaccinations } from '@/services/vaccination.service';
 import { useAllEnfants } from '@/services/user.service';
 import { useAllVaccins } from '@/services/vaccin.service';
-import type { AppointmentDTO, SaveAppointmentDTO, UpdateAppointmentDTO, StatutRvEnum } from '@/types';
-import { StatutRv, StatutRvLabels, StatutRvColors } from '@/types';
-
-// ================================
-// COMPOSANTS UTILITAIRES
-// ================================
+import type { AppointmentDTO, SaveAppointmentDTO, EnfantDTO } from '@/types';
+import { StatutRvLabels, StatutRvColors, type StatutRvEnum } from '@/types/appointment';
+import { useDecodedToken } from '@/contexts/decoded-token-context';
+import { useUserByEmail } from '@/services/user.service';
 
 function StatutBadge({ statut }: { statut: StatutRvEnum }) {
   const colors = StatutRvColors[statut] || StatutRvColors.EN_ATTENTE;
-  const label = StatutRvLabels[statut] || statut;
-  
-  const Icon = {
-    EN_ATTENTE: Clock,
-    CONFIRME: CheckCircle2,
-    REPORTE: Calendar,
-    ANNULE: XCircle,
-    EFFECTUE: CheckCircle2
-  }[statut] || Clock;
-
   return (
-    <Badge className={`${colors.bg} ${colors.text} border ${colors.border}`}>
-      <Icon className="w-3 h-3 mr-1" />
-      {label}
-    </Badge>
+    <span className={`px-3 py-1 rounded-full text-sm font-medium border ${colors.bg} ${colors.text} ${colors.border}`}>
+      {StatutRvLabels[statut]}
+    </span>
   );
 }
-
-// ================================
-// CARD RENDEZ-VOUS
-// ================================
-
-interface RendezVousCardProps {
-  rdv: AppointmentDTO;
-  onView: (rdv: AppointmentDTO) => void;
-  onEdit: (rdv: AppointmentDTO) => void;
-  onDelete: (rdv: AppointmentDTO) => void;
-  onChangeStatus: (rdv: AppointmentDTO) => void;
-}
-
-function RendezVousCard({ rdv, onView, onEdit, onDelete, onChangeStatus }: RendezVousCardProps) {
-  const enfant = rdv.enfant;
-  const parent = rdv.utilisateur;
-
-  return (
-    <Card className="hover:shadow-lg transition-all duration-300 overflow-hidden">
-      <div className={`h-2 ${
-        rdv.statut === 'CONFIRME' ? 'bg-emerald-500' :
-        rdv.statut === 'EN_ATTENTE' ? 'bg-orange-500' :
-        rdv.statut === 'EFFECTUE' ? 'bg-green-600' :
-        rdv.statut === 'REPORTE' ? 'bg-blue-500' :
-        'bg-red-500'
-      }`} />
-      
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between">
-          <div className="flex items-center space-x-3">
-            <Avatar className="h-12 w-12 border-2 border-primary/20">
-              <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary/10 text-primary font-bold">
-                {enfant ? `${enfant.prenom?.charAt(0) || ''}${enfant.nom?.charAt(0) || ''}` : 'RV'}
-              </AvatarFallback>
-            </Avatar>
-            <div>
-              <CardTitle className="text-lg">
-                {enfant ? `${enfant.prenom} ${enfant.nom}` : 'Enfant inconnu'}
-              </CardTitle>
-              <CardDescription className="flex items-center gap-1">
-                <Baby className="w-3 h-3" />
-                {enfant?.dateNaissance ? `Né(e) le ${format(parseISO(enfant.dateNaissance), 'dd/MM/yyyy', { locale: fr })}` : 'Date inconnue'}
-              </CardDescription>
-            </div>
-          </div>
-          <StatutBadge statut={rdv.statut} />
-        </div>
-      </CardHeader>
-
-      <CardContent className="space-y-4">
-        {/* Date et vaccin */}
-        <div className="grid grid-cols-2 gap-4">
-          <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
-            <Calendar className="w-5 h-5 text-primary" />
-            <div>
-              <p className="text-xs text-muted-foreground">Date</p>
-              <p className="font-medium">
-                {rdv.date ? format(parseISO(rdv.date), 'dd MMM yyyy', { locale: fr }) : 'Non définie'}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
-            <Syringe className="w-5 h-5 text-primary" />
-            <div>
-              <p className="text-xs text-muted-foreground">Vaccin</p>
-              <p className="font-medium text-sm">{rdv.nomVaccinAEffectuer || 'Non spécifié'}</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Parent info */}
-        {parent && (
-          <div className="flex items-center gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-            <User className="w-5 h-5 text-blue-600" />
-            <div className="flex-1 min-w-0">
-              <p className="text-xs text-blue-600">Parent</p>
-              <p className="font-medium text-sm truncate">{parent.prenom} {parent.nom}</p>
-              {parent.telephone && (
-                <p className="text-xs text-muted-foreground flex items-center gap-1">
-                  <Phone className="w-3 h-3" />
-                  {parent.telephone}
-                </p>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Actions */}
-        <div className="flex items-center gap-2 pt-2 border-t">
-          <Button size="sm" variant="outline" className="flex-1" onClick={() => onView(rdv)}>
-            <Eye className="w-4 h-4 mr-1" /> Voir
-          </Button>
-          <Button size="sm" variant="outline" className="flex-1" onClick={() => onEdit(rdv)}>
-            <Edit className="w-4 h-4 mr-1" /> Modifier
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => onChangeStatus(rdv)}>
-            <Clock className="w-4 h-4" />
-          </Button>
-          <Button size="sm" variant="destructive" onClick={() => onDelete(rdv)}>
-            <Trash2 className="w-4 h-4" />
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-// ================================
-// SKELETON CARD
-// ================================
-
-function RendezVousCardSkeleton() {
-  return (
-    <Card className="overflow-hidden">
-      <div className="h-2 bg-muted" />
-      <CardHeader className="pb-3">
-        <div className="flex items-center space-x-3">
-          <Skeleton className="h-12 w-12 rounded-full" />
-          <div className="space-y-2">
-            <Skeleton className="h-5 w-32" />
-            <Skeleton className="h-4 w-24" />
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <Skeleton className="h-16 rounded-lg" />
-          <Skeleton className="h-16 rounded-lg" />
-        </div>
-        <Skeleton className="h-16 rounded-lg" />
-        <div className="flex gap-2">
-          <Skeleton className="h-9 flex-1" />
-          <Skeleton className="h-9 flex-1" />
-          <Skeleton className="h-9 w-9" />
-          <Skeleton className="h-9 w-9" />
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-// ================================
-// FORMULAIRE RENDEZ-VOUS
-// ================================
 
 interface RendezVousFormProps {
-  initialData?: AppointmentDTO;
+  selectedEnfantId: number;
+  onEnfantChange: (id: number) => void;
   onSubmit: (data: SaveAppointmentDTO, userId: number, enfantId: number) => Promise<void>;
   onCancel: () => void;
   isLoading?: boolean;
-  isEdit?: boolean;
 }
 
-function RendezVousForm({ initialData, onSubmit, onCancel, isLoading, isEdit }: RendezVousFormProps) {
+function RendezVousForm({ 
+  selectedEnfantId,
+  onEnfantChange,
+  onSubmit, 
+  onCancel, 
+  isLoading, 
+}: RendezVousFormProps) {
   const { data: enfants = [], isLoading: loadingEnfants } = useAllEnfants();
   const { data: vaccins = [], isLoading: loadingVaccins } = useAllVaccins();
 
   const [formData, setFormData] = useState<SaveAppointmentDTO>({
-    nomVaccinAEffectuer: initialData?.nomVaccinAEffectuer || '',
-    date: initialData?.date || format(new Date(), 'yyyy-MM-dd'),
+    nomVaccinAEffectuer: '',
+    date: format(new Date(), 'yyyy-MM-dd'),
   });
-  const [selectedEnfantId, setSelectedEnfantId] = useState<number>(initialData?.enfant?.id || 0);
-  const [selectedUserId, setSelectedUserId] = useState<number>(initialData?.utilisateur?.id || 0);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -258,9 +82,8 @@ function RendezVousForm({ initialData, onSubmit, onCancel, isLoading, isEdit }: 
       return;
     }
     
-    // Trouver le parent de l'enfant sélectionné
     const enfant = enfants.find(e => e.id === selectedEnfantId);
-    const parentId = enfant?.parent?.id || selectedUserId;
+    const parentId = enfant?.parent?.id;
     
     if (!parentId) {
       toast.error('Impossible de trouver le parent de l\'enfant');
@@ -268,29 +91,30 @@ function RendezVousForm({ initialData, onSubmit, onCancel, isLoading, isEdit }: 
     }
 
     await onSubmit(formData, parentId, selectedEnfantId);
+    setFormData({
+      nomVaccinAEffectuer: '',
+      date: format(new Date(), 'yyyy-MM-dd'),
+    });
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      {/* Sélection de l'enfant */}
       <div className="space-y-2">
-        <Label htmlFor="enfant">Enfant *</Label>
+        <Label className="text-blue-700 dark:text-blue-300 font-semibold">Enfant *</Label>
         {loadingEnfants ? (
           <Skeleton className="h-10 w-full" />
         ) : (
           <Select 
             value={selectedEnfantId ? String(selectedEnfantId) : ''} 
-            onValueChange={(v) => setSelectedEnfantId(Number(v))}
-            disabled={isEdit}
+            onValueChange={(v) => onEnfantChange(Number(v))}
           >
-            <SelectTrigger>
+            <SelectTrigger className="border-blue-200 focus:border-blue-500 focus:ring-blue-300 dark:border-blue-800 dark:bg-slate-800 dark:text-white">
               <SelectValue placeholder="Sélectionner un enfant" />
             </SelectTrigger>
             <SelectContent>
               {enfants.map((enfant) => (
                 <SelectItem key={enfant.id} value={String(enfant.id)}>
-                  {enfant.prenom} {enfant.nom} 
-                  {enfant.parent && ` (Parent: ${enfant.parent.prenom} ${enfant.parent.nom})`}
+                  {enfant.prenom} {enfant.nom}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -298,9 +122,8 @@ function RendezVousForm({ initialData, onSubmit, onCancel, isLoading, isEdit }: 
         )}
       </div>
 
-      {/* Sélection du vaccin */}
       <div className="space-y-2">
-        <Label htmlFor="vaccin">Vaccin à effectuer *</Label>
+        <Label className="text-blue-700 dark:text-blue-300 font-semibold">Vaccin à effectuer *</Label>
         {loadingVaccins ? (
           <Skeleton className="h-10 w-full" />
         ) : (
@@ -308,7 +131,7 @@ function RendezVousForm({ initialData, onSubmit, onCancel, isLoading, isEdit }: 
             value={formData.nomVaccinAEffectuer} 
             onValueChange={(v) => setFormData(prev => ({ ...prev, nomVaccinAEffectuer: v }))}
           >
-            <SelectTrigger>
+            <SelectTrigger className="border-blue-200 focus:border-blue-500 focus:ring-blue-300 dark:border-blue-800 dark:bg-slate-800 dark:text-white">
               <SelectValue placeholder="Sélectionner un vaccin" />
             </SelectTrigger>
             <SelectContent>
@@ -317,354 +140,165 @@ function RendezVousForm({ initialData, onSubmit, onCancel, isLoading, isEdit }: 
                   {vaccin.nom}
                 </SelectItem>
               ))}
-              {/* Options manuelles pour vaccins non listés */}
-              <SelectItem value="BCG">BCG</SelectItem>
-              <SelectItem value="Pentavalent (Penta 1)">Pentavalent (Penta 1)</SelectItem>
-              <SelectItem value="Pentavalent (Penta 2)">Pentavalent (Penta 2)</SelectItem>
-              <SelectItem value="Pentavalent (Penta 3)">Pentavalent (Penta 3)</SelectItem>
-              <SelectItem value="ROR">ROR</SelectItem>
-              <SelectItem value="Hépatite B">Hépatite B</SelectItem>
-              <SelectItem value="Polio Oral">Polio Oral</SelectItem>
             </SelectContent>
           </Select>
         )}
       </div>
 
-      {/* Date */}
       <div className="space-y-2">
-        <Label htmlFor="date">Date du rendez-vous *</Label>
+        <Label className="text-blue-700 dark:text-blue-300 font-semibold">Date du rendez-vous *</Label>
         <Input
-          id="date"
           type="date"
           value={formData.date}
           onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
+          className="border-blue-200 focus:border-blue-500 focus:ring-blue-300 dark:border-blue-800 dark:bg-slate-800 dark:text-white"
           min={format(new Date(), 'yyyy-MM-dd')}
           required
         />
       </div>
 
-      {/* Actions */}
       <DialogFooter className="gap-2">
-        <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading}>
+        <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading} className="border-blue-200 text-blue-600 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-400 dark:hover:bg-blue-900/20">
           Annuler
         </Button>
-        <Button type="submit" disabled={isLoading}>
+        <Button type="submit" disabled={isLoading || !formData.nomVaccinAEffectuer} className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white font-semibold">
           {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-          {isEdit ? 'Mettre à jour' : 'Créer le rendez-vous'}
+          Créer le rendez-vous
         </Button>
       </DialogFooter>
     </form>
   );
 }
 
-// ================================
-// MODAL DÉTAILS
-// ================================
-
-interface DetailsModalProps {
-  rdv: AppointmentDTO | null;
-  isOpen: boolean;
-  onClose: () => void;
-}
-
-function DetailsModal({ rdv, isOpen, onClose }: DetailsModalProps) {
-  if (!rdv) return null;
-
-  const enfant = rdv.enfant;
-  const parent = rdv.utilisateur;
-
-  return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <CalendarDays className="w-5 h-5 text-primary" />
-            Détails du rendez-vous
-          </DialogTitle>
-          <DialogDescription>
-            Rendez-vous #{rdv.id}
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-4">
-          {/* Statut */}
-          <div className="flex justify-center">
-            <StatutBadge statut={rdv.statut} />
-          </div>
-
-          {/* Infos enfant */}
-          {enfant && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <Baby className="w-4 h-4" /> Enfant
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="grid grid-cols-2 gap-2 text-sm">
-                <div>
-                  <span className="text-muted-foreground">Nom:</span>
-                  <p className="font-medium">{enfant.prenom} {enfant.nom}</p>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Date de naissance:</span>
-                  <p className="font-medium">
-                    {enfant.dateNaissance && format(parseISO(enfant.dateNaissance), 'dd/MM/yyyy')}
-                  </p>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Sexe:</span>
-                  <p className="font-medium">{enfant.sexe}</p>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Lieu de naissance:</span>
-                  <p className="font-medium">{enfant.lieuNaissance || 'N/A'}</p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Infos parent */}
-          {parent && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <User className="w-4 h-4" /> Parent
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="grid grid-cols-2 gap-2 text-sm">
-                <div>
-                  <span className="text-muted-foreground">Nom:</span>
-                  <p className="font-medium">{parent.prenom} {parent.nom}</p>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Téléphone:</span>
-                  <p className="font-medium">{parent.telephone || 'N/A'}</p>
-                </div>
-                <div className="col-span-2">
-                  <span className="text-muted-foreground">Email:</span>
-                  <p className="font-medium">{parent.email || 'N/A'}</p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Infos RDV */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <Syringe className="w-4 h-4" /> Vaccination
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-2 gap-2 text-sm">
-              <div>
-                <span className="text-muted-foreground">Vaccin:</span>
-                <p className="font-medium">{rdv.nomVaccinAEffectuer}</p>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Date:</span>
-                <p className="font-medium">
-                  {rdv.date && format(parseISO(rdv.date), 'dd MMMM yyyy', { locale: fr })}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        <DialogFooter>
-          <Button onClick={onClose}>Fermer</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ================================
-// MODAL CHANGEMENT STATUT
-// ================================
-
-interface ChangeStatusModalProps {
-  rdv: AppointmentDTO | null;
-  isOpen: boolean;
-  onClose: () => void;
-  onConfirm: (appointmentId: number, newStatut: StatutRvEnum) => Promise<void>;
-  isLoading?: boolean;
-}
-
-function ChangeStatusModal({ rdv, isOpen, onClose, onConfirm, isLoading }: ChangeStatusModalProps) {
-  const [selectedStatus, setSelectedStatus] = useState<StatutRvEnum | ''>('');
-
-  useEffect(() => {
-    if (rdv) {
-      setSelectedStatus(rdv.statut);
-    }
-  }, [rdv]);
-
-  if (!rdv) return null;
-
-  const handleConfirm = async () => {
-    if (selectedStatus && rdv.id) {
-      await onConfirm(rdv.id, selectedStatus);
-      onClose();
-    }
-  };
-
-  return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Changer le statut</DialogTitle>
-          <DialogDescription>
-            Modifier le statut du rendez-vous pour {rdv.enfant?.prenom} {rdv.enfant?.nom}
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-4 py-4">
-          <div className="flex justify-center mb-4">
-            <StatutBadge statut={rdv.statut} />
-          </div>
-          
-          <Select value={selectedStatus} onValueChange={(v) => setSelectedStatus(v as StatutRvEnum)}>
-            <SelectTrigger>
-              <SelectValue placeholder="Nouveau statut" />
-            </SelectTrigger>
-            <SelectContent>
-              {Object.entries(StatutRvLabels).map(([key, label]) => (
-                <SelectItem key={key} value={key}>
-                  {label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={isLoading}>
-            Annuler
-          </Button>
-          <Button onClick={handleConfirm} disabled={isLoading || !selectedStatus}>
-            {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-            Confirmer
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ================================
-// PAGE PRINCIPALE
-// ================================
-
 export default function RendezVous() {
-  // États
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchTerm, setSearchTerm] = useState('');
   const [statutFilter, setStatutFilter] = useState<string>('tous');
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = viewMode === 'grid' ? 6 : 10;
-
-  // Modals
+  const [selectedEnfantId, setSelectedEnfantId] = useState<number>(0);
+  const [selectedChildForCarnet, setSelectedChildForCarnet] = useState<EnfantDTO | null>(null);
   const [createModalOpen, setCreateModalOpen] = useState(false);
-  const [editModalOpen, setEditModalOpen] = useState(false);
-  const [detailsModalOpen, setDetailsModalOpen] = useState(false);
-  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [statusModalOpen, setStatusModalOpen] = useState(false);
-  const [selectedRdv, setSelectedRdv] = useState<AppointmentDTO | null>(null);
+  const [carnetModalOpen, setCarnetModalOpen] = useState(false);
+  const { decodedToken } = useDecodedToken();
+  const { data: currentUser } = useUserByEmail(decodedToken?.sub || '');
+  const normalizedRole = (decodedToken?.role || '').replace(/^ROLE_/, '').toUpperCase();
+  const isInfirmier = normalizedRole === 'INFIRMIER';
+  const currentUserEmail = (decodedToken?.sub || currentUser?.email || '').toLowerCase();
 
   // API Hooks
   const { data: appointments = [], isLoading, isError, refetch } = useAllAppointments();
+  const { data: enfants = [] } = useAllEnfants();
+  const { data: vaccinations = [] } = useAllVaccinations();
   const createMutation = useCreateAppointment();
-  const updateMutation = useUpdateAppointment();
-  const deleteMutation = useDeleteAppointment();
-  const updateStatusMutation = useUpdateAppointmentStatus();
+  const ownedIds = useMemo(() => {
+    try {
+      const raw = decodedToken?.sub
+        ? localStorage.getItem(`infirmier-owned-records:${decodedToken.sub.toLowerCase()}`)
+        : null;
+      if (!raw) return { appointmentIds: [] as number[] };
+      const parsed = JSON.parse(raw) as { appointmentIds?: number[] };
+      return { appointmentIds: Array.isArray(parsed.appointmentIds) ? parsed.appointmentIds : [] };
+    } catch {
+      return { appointmentIds: [] as number[] };
+    }
+  }, [decodedToken?.sub, appointments]);
+  const scopedAppointments = useMemo(() => {
+    if (!isInfirmier) return appointments;
+    const vaccinationAppointmentIds = vaccinations
+      .filter((vacc) => {
+        const ownerId = vacc.utilisateur?.id != null ? Number(vacc.utilisateur.id) : null;
+        const ownerEmail = (vacc.utilisateur?.email || '').toLowerCase();
+        return (
+          (ownerId != null && ownerId === (currentUser?.id ?? -1)) ||
+          (!!ownerEmail && ownerEmail === currentUserEmail)
+        );
+      })
+      .map((vacc) => vacc.appointment?.id)
+      .filter((id): id is number => typeof id === 'number');
 
-  // Filtrage
-  const filteredAppointments = appointments.filter(rdv => {
+    return appointments.filter((rdv) => {
+      const rdvId = rdv.id != null ? Number(rdv.id) : null;
+      const ownerId = rdv.utilisateur?.id != null ? Number(rdv.utilisateur.id) : null;
+      const ownerEmail = (rdv.utilisateur?.email || '').toLowerCase();
+      return (
+        (ownerId != null && ownerId === (currentUser?.id ?? -1)) ||
+        (!!ownerEmail && ownerEmail === currentUserEmail) ||
+        (rdvId != null && vaccinationAppointmentIds.includes(rdvId)) ||
+        (rdvId != null && ownedIds.appointmentIds.includes(rdvId))
+      );
+    });
+  }, [appointments, vaccinations, isInfirmier, currentUser?.id, currentUserEmail, ownedIds.appointmentIds]);
+
+  // Group appointments by child
+  const appointmentsByChild = enfants.reduce((acc, child) => {
+    const childAppointments = scopedAppointments.filter(rdv => rdv.enfant?.id === child.id);
+    if (childAppointments.length > 0) {
+      acc.push({ child, appointments: childAppointments });
+    }
+    return acc;
+  }, [] as Array<{ child: EnfantDTO; appointments: AppointmentDTO[] }>);
+
+  // Filter
+  const filteredChildren = appointmentsByChild.filter(({ child, appointments }) => {
     const matchSearch = searchTerm === '' || 
-      rdv.nomVaccinAEffectuer?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      rdv.enfant?.prenom?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      rdv.enfant?.nom?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchStatut = statutFilter === 'tous' || rdv.statut === statutFilter;
+      child.prenom?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      child.nom?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchStatut = statutFilter === 'tous' || 
+      appointments.some(rdv => rdv.statut === statutFilter as StatutRvEnum);
     return matchSearch && matchStatut;
   });
 
-  // Pagination
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedAppointments = filteredAppointments.slice(startIndex, startIndex + itemsPerPage);
-  const totalPages = Math.ceil(filteredAppointments.length / itemsPerPage);
-
-  // Reset page on filter change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, statutFilter, viewMode]);
-
   // Stats
   const stats = {
-    total: appointments.length,
-    enAttente: appointments.filter(r => r.statut === 'EN_ATTENTE').length,
-    confirme: appointments.filter(r => r.statut === 'CONFIRME').length,
-    effectue: appointments.filter(r => r.statut === 'EFFECTUE').length,
+    total: scopedAppointments.length,
+    enAttente: scopedAppointments.filter(r => r.statut === 'EN_ATTENTE').length,
+    confirme: scopedAppointments.filter(r => r.statut === 'CONFIRME').length,
+    effectue: scopedAppointments.filter(r => r.statut === 'EFFECTUE').length,
   };
 
   // Handlers
   const handleCreate = async (data: SaveAppointmentDTO, userId: number, enfantId: number) => {
     try {
-      await createMutation.mutateAsync({ data, userId, enfantId });
+      const createdAppointment = await createMutation.mutateAsync({ data, userId, enfantId });
+      try {
+        const raw = decodedToken?.sub
+          ? localStorage.getItem(`infirmier-owned-records:${decodedToken.sub.toLowerCase()}`)
+          : null;
+        const parsed = raw ? JSON.parse(raw) : {};
+        const existing = Array.isArray(parsed.appointmentIds) ? parsed.appointmentIds : [];
+        if (createdAppointment?.id && !existing.includes(createdAppointment.id)) {
+          localStorage.setItem(
+            `infirmier-owned-records:${(decodedToken?.sub || '').toLowerCase()}`,
+            JSON.stringify({ ...parsed, appointmentIds: [...existing, createdAppointment.id] })
+          );
+        }
+      } catch {
+        // ignore storage errors
+      }
       toast.success('Rendez-vous créé avec succès');
       setCreateModalOpen(false);
+      setSelectedEnfantId(0);
+      refetch();
     } catch (error: any) {
       toast.error(error.message || 'Erreur lors de la création');
     }
   };
 
-  const handleUpdate = async (data: SaveAppointmentDTO) => {
-    if (!selectedRdv?.id) return;
-    try {
-      await updateMutation.mutateAsync({
-        id: selectedRdv.id,
-        nomVaccinAEffectuer: data.nomVaccinAEffectuer,
-      });
-      toast.success('Rendez-vous mis à jour');
-      setEditModalOpen(false);
-      setSelectedRdv(null);
-    } catch (error: any) {
-      toast.error(error.message || 'Erreur lors de la mise à jour');
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!selectedRdv?.id) return;
-    try {
-      await deleteMutation.mutateAsync(selectedRdv.id);
-      toast.success('Rendez-vous supprimé');
-      setDeleteModalOpen(false);
-      setSelectedRdv(null);
-    } catch (error: any) {
-      toast.error(error.message || 'Erreur lors de la suppression');
-    }
-  };
-
-  const handleChangeStatus = async (appointmentId: number, newStatut: StatutRvEnum) => {
-    try {
-      await updateStatusMutation.mutateAsync({ 
-        appointmentId, 
-        data: { statut: newStatut } 
-      });
-      toast.success('Statut mis à jour');
-    } catch (error: any) {
-      toast.error(error.message || 'Erreur lors du changement de statut');
-    }
+  const handleCreateFromCarnet = (enfant: EnfantDTO) => {
+    setSelectedEnfantId(enfant.id || 0);
+    setCarnetModalOpen(false);
+    setCreateModalOpen(true);
   };
 
   // Loading state
   if (isLoading) {
     return (
       <PageContainer title="Rendez-vous" subtitle="Gestion des rendez-vous de vaccination">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[...Array(6)].map((_, i) => (
-            <RendezVousCardSkeleton key={i} />
-          ))}
-        </div>
+        <Card>
+          <CardContent className="py-12 text-center">
+            <Loader2 className="h-16 w-16 text-muted-foreground mx-auto mb-4 animate-spin" />
+            <h3 className="text-lg font-semibold mb-2">Chargement les rendez-vous...</h3>
+            <p className="text-muted-foreground">Veuillez patienter</p>
+          </CardContent>
+        </Card>
       </PageContainer>
     );
   }
@@ -695,61 +329,61 @@ export default function RendezVous() {
                 <p className="text-sm text-blue-600">Total</p>
                 <p className="text-2xl font-bold text-blue-700">{stats.total}</p>
               </div>
-              <CalendarDays className="h-8 w-8 text-blue-500" />
+              <Calendar className="h-8 w-8 text-blue-500" />
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 border-orange-200">
+        <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border-blue-200">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-orange-600">En attente</p>
-                <p className="text-2xl font-bold text-orange-700">{stats.enAttente}</p>
+                <p className="text-sm text-blue-600">En attente</p>
+                <p className="text-2xl font-bold text-blue-700">{stats.enAttente}</p>
               </div>
-              <Clock className="h-8 w-8 text-orange-500" />
+              <Clock className="h-8 w-8 text-blue-500" />
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-900/20 dark:to-emerald-800/20 border-emerald-200">
+        <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border-blue-200">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-emerald-600">Confirmés</p>
-                <p className="text-2xl font-bold text-emerald-700">{stats.confirme}</p>
+                <p className="text-sm text-blue-600">Confirmés</p>
+                <p className="text-2xl font-bold text-blue-700">{stats.confirme}</p>
               </div>
-              <CheckCircle2 className="h-8 w-8 text-emerald-500" />
+              <CheckCircle2 className="h-8 w-8 text-blue-500" />
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 border-green-200">
+        <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border-blue-200">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-green-600">Effectués</p>
-                <p className="text-2xl font-bold text-green-700">{stats.effectue}</p>
+                <p className="text-sm text-blue-600">Effectués</p>
+                <p className="text-2xl font-bold text-blue-700">{stats.effectue}</p>
               </div>
-              <CheckCircle2 className="h-8 w-8 text-green-500" />
+              <CheckCircle2 className="h-8 w-8 text-blue-500" />
             </div>
           </CardContent>
         </Card>
       </div>
 
       {/* Toolbar */}
-      <Card className="mb-6">
-        <CardContent className="p-4">
+      <Card className="mb-6 border-0 dark:bg-slate-900 shadow-md">
+        <CardContent className="p-5">
           <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
             <div className="flex flex-1 gap-4 w-full lg:w-auto">
               <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-blue-400" />
                 <Input
-                  placeholder="Rechercher..."
+                  placeholder="Rechercher un enfant..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
+                  className="pl-10 border-blue-200 focus:border-blue-500 focus:ring-blue-300 dark:border-blue-800 dark:bg-slate-800 dark:text-white"
                 />
               </div>
               <Select value={statutFilter} onValueChange={setStatutFilter}>
-                <SelectTrigger className="w-48">
+                <SelectTrigger className="w-48 border-blue-200 focus:border-blue-500 focus:ring-blue-300 dark:border-blue-800 dark:bg-slate-800 dark:text-white">
                   <SelectValue placeholder="Statut" />
                 </SelectTrigger>
                 <SelectContent>
@@ -762,26 +396,10 @@ export default function RendezVous() {
             </div>
             
             <div className="flex gap-2">
-              <div className="flex border rounded-lg">
-                <Button
-                  variant={viewMode === 'grid' ? 'default' : 'ghost'}
-                  size="sm"
-                  onClick={() => setViewMode('grid')}
-                >
-                  <LayoutGrid className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant={viewMode === 'list' ? 'default' : 'ghost'}
-                  size="sm"
-                  onClick={() => setViewMode('list')}
-                >
-                  <List className="h-4 w-4" />
-                </Button>
-              </div>
-              <Button variant="outline" size="sm" onClick={() => refetch()}>
+              <Button variant="outline" size="sm" onClick={() => refetch()} className="border-blue-200 text-blue-600 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-400 dark:hover:bg-blue-900/20">
                 <RefreshCw className="h-4 w-4" />
               </Button>
-              <Button onClick={() => setCreateModalOpen(true)}>
+              <Button onClick={() => setCreateModalOpen(true)} className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white font-semibold shadow-md">
                 <Plus className="h-4 w-4 mr-2" />
                 Nouveau RDV
               </Button>
@@ -790,16 +408,18 @@ export default function RendezVous() {
         </CardContent>
       </Card>
 
-      {/* Contenu */}
-      {filteredAppointments.length === 0 ? (
+      {/* Content - Carnets par enfant */}
+      {filteredChildren.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center">
-            <CalendarDays className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+            <Calendar className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
             <h3 className="text-lg font-semibold mb-2">Aucun rendez-vous</h3>
             <p className="text-muted-foreground mb-4">
               {searchTerm || statutFilter !== 'tous' 
                 ? 'Aucun rendez-vous ne correspond à vos critères.'
-                : 'Commencez par créer un nouveau rendez-vous.'}
+                : isInfirmier
+                  ? 'Aucun rendez-vous créé par votre compte pour le moment.'
+                  : 'Commencez par créer un nouveau rendez-vous.'}
             </p>
             <Button onClick={() => setCreateModalOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
@@ -807,123 +427,115 @@ export default function RendezVous() {
             </Button>
           </CardContent>
         </Card>
-      ) : viewMode === 'grid' ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {paginatedAppointments.map((rdv) => (
-            <RendezVousCard
-              key={rdv.id}
-              rdv={rdv}
-              onView={(r) => { setSelectedRdv(r); setDetailsModalOpen(true); }}
-              onEdit={(r) => { setSelectedRdv(r); setEditModalOpen(true); }}
-              onDelete={(r) => { setSelectedRdv(r); setDeleteModalOpen(true); }}
-              onChangeStatus={(r) => { setSelectedRdv(r); setStatusModalOpen(true); }}
-            />
-          ))}
-        </div>
       ) : (
-        <Card>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Enfant</TableHead>
-                <TableHead>Parent</TableHead>
-                <TableHead>Vaccin</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Statut</TableHead>
-                <TableHead className="text-center">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {paginatedAppointments.map((rdv) => (
-                <TableRow key={rdv.id}>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Avatar className="h-8 w-8">
-                        <AvatarFallback className="text-xs">
-                          {rdv.enfant?.prenom?.charAt(0)}{rdv.enfant?.nom?.charAt(0)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span className="font-medium">{rdv.enfant?.prenom} {rdv.enfant?.nom}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    {rdv.utilisateur?.prenom} {rdv.utilisateur?.nom}
-                  </TableCell>
-                  <TableCell>{rdv.nomVaccinAEffectuer}</TableCell>
-                  <TableCell>
-                    {rdv.date && format(parseISO(rdv.date), 'dd/MM/yyyy')}
-                  </TableCell>
-                  <TableCell><StatutBadge statut={rdv.statut} /></TableCell>
-                  <TableCell>
-                    <div className="flex justify-center gap-1">
-                      <Button size="sm" variant="ghost" onClick={() => { setSelectedRdv(rdv); setDetailsModalOpen(true); }}>
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                      <Button size="sm" variant="ghost" onClick={() => { setSelectedRdv(rdv); setEditModalOpen(true); }}>
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button size="sm" variant="ghost" onClick={() => { setSelectedRdv(rdv); setStatusModalOpen(true); }}>
-                        <Clock className="h-4 w-4" />
-                      </Button>
-                      <Button size="sm" variant="ghost" className="text-red-600" onClick={() => { setSelectedRdv(rdv); setDeleteModalOpen(true); }}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </Card>
-      )}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredChildren.map(({ child, appointments: childAppointments }) => (
+            <Card key={child.id} className="overflow-hidden hover:shadow-xl transition-all duration-300 border-0 bg-white dark:bg-slate-900">
+              {/* Header avec gradient bleu */}
+              <div className="bg-gradient-to-r from-blue-600 to-blue-500 px-6 py-4 relative">
+                <div className="flex items-center gap-4">
+                  <Avatar className="h-14 w-14 border-3 border-white shadow-lg">
+                    <AvatarFallback className="bg-white text-blue-600 font-bold text-lg">
+                      {child.prenom?.[0]}{child.nom?.[0]}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 text-white">
+                    <p className="font-bold text-lg leading-none">{child.prenom} {child.nom}</p>
+                    <p className="text-sm text-blue-100 mt-1">
+                      {childAppointments.length} rendez-vous
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              <CardContent className="p-6 space-y-5">
+                {/* Stats Bar */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="bg-gradient-to-br from-orange-50 to-orange-100/50 dark:from-orange-950/30 dark:to-orange-900/30 rounded-lg p-4 border border-orange-100 dark:border-orange-800">
+                    <p className="text-2xl font-bold text-orange-600">
+                      {childAppointments.filter(r => r.statut === 'EN_ATTENTE').length}
+                    </p>
+                    <p className="text-xs font-semibold text-orange-700 uppercase tracking-wide mt-1">En attente</p>
+                  </div>
+                  <div className="bg-gradient-to-br from-emerald-50 to-emerald-100/50 dark:from-emerald-950/30 dark:to-emerald-900/30 rounded-lg p-4 border border-emerald-100 dark:border-emerald-800">
+                    <p className="text-2xl font-bold text-emerald-600">
+                      {childAppointments.filter(r => r.statut === 'CONFIRME').length}
+                    </p>
+                    <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide mt-1">Confirmés</p>
+                  </div>
+                  <div className="bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-950/30 dark:to-blue-900/30 rounded-lg p-4 border border-blue-100 dark:border-blue-800">
+                    <p className="text-2xl font-bold text-blue-600">
+                      {childAppointments.filter(r => r.statut === 'EFFECTUE').length}
+                    </p>
+                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide mt-1">Effectués</p>
+                  </div>
+                </div>
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex justify-center mt-6">
-          <Pagination>
-            <PaginationContent>
-              <PaginationItem>
-                <PaginationPrevious 
-                  href="#" 
-                  onClick={(e) => { e.preventDefault(); if (currentPage > 1) setCurrentPage(currentPage - 1); }}
-                />
-              </PaginationItem>
-              {[...Array(totalPages)].map((_, i) => (
-                <PaginationItem key={i}>
-                  <PaginationLink 
-                    href="#" 
-                    isActive={currentPage === i + 1}
-                    onClick={(e) => { e.preventDefault(); setCurrentPage(i + 1); }}
-                  >
-                    {i + 1}
-                  </PaginationLink>
-                </PaginationItem>
-              ))}
-              <PaginationItem>
-                <PaginationNext 
-                  href="#" 
-                  onClick={(e) => { e.preventDefault(); if (currentPage < totalPages) setCurrentPage(currentPage + 1); }}
-                />
-              </PaginationItem>
-            </PaginationContent>
-          </Pagination>
+                {/* Separator */}
+                <div className="h-px bg-gradient-to-r from-transparent via-blue-200 to-transparent"></div>
+
+                {/* Preview appointments */}
+                {childAppointments.length > 0 ? (
+                  <div className="space-y-3">
+                    <p className="text-xs font-bold text-blue-700 uppercase tracking-widest">Prochains rendez-vous</p>
+                    <div className="space-y-2">
+                      {childAppointments.slice(0, 2).map((rdv) => (
+                        <div key={rdv.id} className="flex items-start justify-between gap-3 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-100 dark:border-blue-800">
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-gray-900 dark:text-white text-sm">{rdv.nomVaccinAEffectuer}</p>
+                            <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                              {rdv.date && format(parseISO(rdv.date), 'dd MMM yyyy', { locale: fr })}
+                            </p>
+                          </div>
+                          <StatutBadge statut={rdv.statut as StatutRvEnum} />
+                        </div>
+                      ))}
+                    </div>
+                    {childAppointments.length > 2 && (
+                      <p className="text-xs text-blue-600 dark:text-blue-400 font-medium pt-1">
+                        +{childAppointments.length - 2} autres
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-center py-4">
+                    <p className="text-sm text-muted-foreground">Aucun rendez-vous pour le moment</p>
+                  </div>
+                )}
+
+                {/* Button */}
+                <Button 
+                  className="w-full mt-3 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white font-semibold shadow-md hover:shadow-lg transition-all"
+                  onClick={() => {
+                    setSelectedChildForCarnet(child);
+                    setCarnetModalOpen(true);
+                  }}
+                >
+                  <Calendar className="h-4 w-4 mr-2" />
+                  Voir les rendez-vous
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       )}
 
       {/* Modals */}
       {/* Create Modal */}
       <Dialog open={createModalOpen} onOpenChange={setCreateModalOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Plus className="w-5 h-5" />
-              Nouveau rendez-vous
+        <DialogContent className="border-0 dark:bg-slate-900">
+          <DialogHeader className="bg-gradient-to-r from-blue-600 to-blue-500 -mx-6 -mt-6 mb-4 px-6 py-4 rounded-t-lg">
+            <DialogTitle className="text-white text-lg font-bold flex items-center gap-2">
+              <Plus className="h-5 w-5" />
+              Créer un rendez-vous
             </DialogTitle>
-            <DialogDescription>
-              Créer un nouveau rendez-vous de vaccination
+            <DialogDescription className="text-blue-100">
+              Ajouter un nouveau rendez-vous de vaccination
             </DialogDescription>
           </DialogHeader>
-          <RendezVousForm
+          <RendezVousForm 
+            selectedEnfantId={selectedEnfantId}
+            onEnfantChange={setSelectedEnfantId}
             onSubmit={handleCreate}
             onCancel={() => setCreateModalOpen(false)}
             isLoading={createMutation.isPending}
@@ -931,82 +543,18 @@ export default function RendezVous() {
         </DialogContent>
       </Dialog>
 
-      {/* Edit Modal */}
-      <Dialog open={editModalOpen} onOpenChange={setEditModalOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Edit className="w-5 h-5" />
-              Modifier le rendez-vous
-            </DialogTitle>
-            <DialogDescription>
-              Modifier les informations du rendez-vous
-            </DialogDescription>
-          </DialogHeader>
-          {selectedRdv && (
-            <RendezVousForm
-              initialData={selectedRdv}
-              onSubmit={(data) => handleUpdate(data)}
-              onCancel={() => { setEditModalOpen(false); setSelectedRdv(null); }}
-              isLoading={updateMutation.isPending}
-              isEdit
-            />
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Details Modal */}
-      <DetailsModal
-        rdv={selectedRdv}
-        isOpen={detailsModalOpen}
-        onClose={() => { setDetailsModalOpen(false); setSelectedRdv(null); }}
-      />
-
-      {/* Change Status Modal */}
-      <ChangeStatusModal
-        rdv={selectedRdv}
-        isOpen={statusModalOpen}
-        onClose={() => { setStatusModalOpen(false); setSelectedRdv(null); }}
-        onConfirm={handleChangeStatus}
-        isLoading={updateStatusMutation.isPending}
-      />
-
-      {/* Delete Modal */}
-      <Dialog open={deleteModalOpen} onOpenChange={setDeleteModalOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-red-600">
-              <AlertTriangle className="w-5 h-5" />
-              Confirmer la suppression
-            </DialogTitle>
-            <DialogDescription>
-              Êtes-vous sûr de vouloir supprimer ce rendez-vous ? Cette action est irréversible.
-            </DialogDescription>
-          </DialogHeader>
-          {selectedRdv && (
-            <div className="py-4">
-              <p className="text-center">
-                <strong>{selectedRdv.enfant?.prenom} {selectedRdv.enfant?.nom}</strong>
-                <br />
-                <span className="text-muted-foreground">{selectedRdv.nomVaccinAEffectuer}</span>
-                <br />
-                <span className="text-muted-foreground">
-                  {selectedRdv.date && format(parseISO(selectedRdv.date), 'dd MMMM yyyy', { locale: fr })}
-                </span>
-              </p>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setDeleteModalOpen(false); setSelectedRdv(null); }}>
-              Annuler
-            </Button>
-            <Button variant="destructive" onClick={handleDelete} disabled={deleteMutation.isPending}>
-              {deleteMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              Supprimer
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Carnet Modal */}
+      {selectedChildForCarnet && (
+        <RendezVousCarnetModal
+          enfant={selectedChildForCarnet}
+          isOpen={carnetModalOpen}
+          onClose={() => {
+            setCarnetModalOpen(false);
+            setSelectedChildForCarnet(null);
+          }}
+          onCreateAppointment={handleCreateFromCarnet}
+        />
+      )}
     </PageContainer>
   );
 }

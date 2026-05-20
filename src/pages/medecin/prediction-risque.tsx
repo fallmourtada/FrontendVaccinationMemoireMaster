@@ -24,22 +24,49 @@ import {
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 
 import {
   usePredictRisk,
   mapParentToPredictionInput,
-  getRiskStyle,
   type PredictionResult,
 } from '@/services/prediction.service';
 
-import { useAllUsers } from '@/services/user.service';
+import { useAllUsers, useUserByEmail } from '@/services/user.service';
 import { type UtilisateurDTO, UserRole } from '@/types/user';
+import { useDecodedToken } from '@/contexts/decoded-token-context';
+
+type InfirmierOwnedIds = {
+  parentIds: number[];
+  enfantIds: number[];
+  appointmentIds: number[];
+  vaccinationIds: number[];
+};
+
+const readInfirmierOwnedIds = (email?: string | null): InfirmierOwnedIds => {
+  if (!email) {
+    return { parentIds: [], enfantIds: [], appointmentIds: [], vaccinationIds: [] };
+  }
+  try {
+    const raw = localStorage.getItem(`infirmier-owned-records:${email.toLowerCase()}`);
+    if (!raw) {
+      return { parentIds: [], enfantIds: [], appointmentIds: [], vaccinationIds: [] };
+    }
+    const parsed = JSON.parse(raw) as Partial<InfirmierOwnedIds>;
+    return {
+      parentIds: Array.isArray(parsed.parentIds) ? parsed.parentIds : [],
+      enfantIds: Array.isArray(parsed.enfantIds) ? parsed.enfantIds : [],
+      appointmentIds: Array.isArray(parsed.appointmentIds) ? parsed.appointmentIds : [],
+      vaccinationIds: Array.isArray(parsed.vaccinationIds) ? parsed.vaccinationIds : [],
+    };
+  } catch {
+    return { parentIds: [], enfantIds: [], appointmentIds: [], vaccinationIds: [] };
+  }
+};
 
 // ================================
 // COMPOSANT JAUGE CIRCULAIRE
@@ -101,8 +128,6 @@ const RiskResultCard: React.FC<{
   onRefresh: () => void;
   isRefreshing: boolean;
 }> = ({ parent, result, onRefresh, isRefreshing }) => {
-  const style = getRiskStyle(result.prediction);
-
   const MainIcon = result.prediction === 'Haut risque' ? ShieldAlert
     : result.prediction === 'Risque modéré' ? ShieldQuestion
     : ShieldCheck;
@@ -135,9 +160,9 @@ const RiskResultCard: React.FC<{
   };
 
   const colorMap = {
-    'Haut risque': { main: '#ef4444', bg: 'from-red-500 to-rose-600', light: 'bg-red-50', border: 'border-red-200' },
-    'Risque modéré': { main: '#f59e0b', bg: 'from-amber-500 to-orange-600', light: 'bg-amber-50', border: 'border-amber-200' },
-    'Faible risque': { main: '#22c55e', bg: 'from-emerald-500 to-green-600', light: 'bg-green-50', border: 'border-green-200' },
+    'Haut risque': { main: '#dc2626', bg: 'from-red-600 to-red-500', light: 'bg-red-50', border: 'border-red-200' },
+    'Risque modéré': { main: '#d97706', bg: 'from-amber-600 to-amber-500', light: 'bg-amber-50', border: 'border-amber-200' },
+    'Faible risque': { main: '#16a34a', bg: 'from-emerald-600 to-emerald-500', light: 'bg-emerald-50', border: 'border-emerald-200' },
   };
 
   const colors = colorMap[result.prediction as keyof typeof colorMap] || colorMap['Faible risque'];
@@ -190,17 +215,17 @@ const RiskResultCard: React.FC<{
           <div className="flex items-center justify-center gap-8 py-4">
             <CircularGauge
               value={result.probabilities['Haut risque']}
-              color="#ef4444"
+              color="#dc2626"
               label="Haut risque"
             />
             <CircularGauge
               value={result.probabilities['Risque modéré']}
-              color="#f59e0b"
+              color="#d97706"
               label="Risque modéré"
             />
             <CircularGauge
               value={result.probabilities['Faible risque']}
-              color="#22c55e"
+              color="#16a34a"
               label="Faible risque"
             />
           </div>
@@ -212,9 +237,9 @@ const RiskResultCard: React.FC<{
               Distribution des probabilités
             </h4>
             {[
-              { label: 'Haut risque', value: result.probabilities['Haut risque'], color: 'bg-red-500', bg: 'bg-red-100' },
+              { label: 'Haut risque', value: result.probabilities['Haut risque'], color: 'bg-red-600', bg: 'bg-red-100' },
               { label: 'Risque modéré', value: result.probabilities['Risque modéré'], color: 'bg-amber-500', bg: 'bg-amber-100' },
-              { label: 'Faible risque', value: result.probabilities['Faible risque'], color: 'bg-emerald-500', bg: 'bg-emerald-100' },
+              { label: 'Faible risque', value: result.probabilities['Faible risque'], color: 'bg-emerald-600', bg: 'bg-emerald-100' },
             ].map(({ label, value, color, bg }) => (
               <div key={label} className="space-y-1.5">
                 <div className="flex items-center justify-between text-sm">
@@ -236,24 +261,24 @@ const RiskResultCard: React.FC<{
       {/* === GRILLE INFOS + RECOMMANDATIONS === */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Facteurs analysés */}
-        <Card className="shadow-lg border-slate-200">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <TrendingUp className="h-5 w-5 text-primary" />
+        <Card className="shadow-lg border-0 dark:bg-slate-900 overflow-hidden">
+          <div className={`bg-gradient-to-r ${colors.bg} px-6 py-4`}>
+            <h3 className="text-white font-bold text-lg flex items-center gap-2">
+              <TrendingUp className="h-5 w-5" />
               Facteurs analysés
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+            </h3>
+          </div>
+          <CardContent className="pt-6">
             <div className="space-y-3">
               {factors.map(({ icon: FactorIcon, label, value }) => (
-                <div key={label} className="flex items-center justify-between py-2 border-b border-slate-50 last:border-0">
+                <div key={label} className="flex items-center justify-between py-2 border-b border-slate-200 dark:border-slate-800 last:border-0">
                   <div className="flex items-center gap-3">
-                    <div className="p-1.5 bg-slate-100 rounded-lg">
-                      <FactorIcon className="h-4 w-4 text-slate-500" />
+                    <div className={`p-1.5 ${colors.light} rounded-lg`}>
+                      <FactorIcon className="h-4 w-4" style={{ color: colors.main }} />
                     </div>
-                    <span className="text-sm text-slate-600">{label}</span>
+                    <span className="text-sm text-slate-700 dark:text-slate-300">{label}</span>
                   </div>
-                  <span className="text-sm font-semibold text-slate-900">{value}</span>
+                  <span className="text-sm font-semibold" style={{ color: colors.main }}>{value}</span>
                 </div>
               ))}
             </div>
@@ -261,21 +286,24 @@ const RiskResultCard: React.FC<{
         </Card>
 
         {/* Recommandations */}
-        <Card className={`shadow-lg ${colors.border} border-2`}>
-          <CardHeader className={`${colors.light} pb-3`}>
-            <CardTitle className="text-base flex items-center gap-2">
-              <RecommendIcon className={`h-5 w-5 ${style.iconColor}`} />
+        <Card className="shadow-lg border-0 dark:bg-slate-900 overflow-hidden">
+          <div className={`bg-gradient-to-r ${colors.bg} px-6 py-4`}>
+            <h3 className="text-white font-bold text-lg flex items-center gap-2">
+              <RecommendIcon className="h-5 w-5" />
               Recommandations
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pt-4">
+            </h3>
+          </div>
+          <CardContent className="pt-6">
             <ul className="space-y-3">
               {(recommendations[result.prediction as keyof typeof recommendations] || []).map((rec, i) => (
                 <li key={i} className="flex items-start gap-3">
-                  <div className={`mt-0.5 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white bg-gradient-to-br ${colors.bg} shrink-0`}>
+                  <div
+                    className="mt-0.5 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0"
+                    style={{ background: colors.main }}
+                  >
                     {i + 1}
                   </div>
-                  <span className="text-sm text-slate-700 leading-relaxed">{rec}</span>
+                  <span className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">{rec}</span>
                 </li>
               ))}
             </ul>
@@ -286,10 +314,9 @@ const RiskResultCard: React.FC<{
       {/* Bouton relancer */}
       <div className="flex justify-center">
         <Button
-          variant="outline"
           onClick={onRefresh}
           disabled={isRefreshing}
-          className="gap-2"
+          className="gap-2 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white font-semibold shadow-md"
         >
           {isRefreshing ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -318,28 +345,28 @@ const ParentSelectCard: React.FC<{
       onClick={onClick}
       className={`w-full text-left p-4 rounded-xl border-2 transition-all duration-200 ${
         isSelected
-          ? 'border-primary bg-primary/5 shadow-md ring-2 ring-primary/20'
-          : 'border-slate-200 hover:border-slate-300 hover:shadow-sm bg-white'
+          ? 'border-blue-300 bg-blue-50 dark:bg-blue-950/20 shadow-md ring-2 ring-blue-300/50'
+          : 'border-blue-100 dark:border-blue-800 hover:border-blue-200 hover:shadow-sm bg-white dark:bg-slate-800'
       }`}
     >
       <div className="flex items-center gap-3">
-        <Avatar className={`h-11 w-11 ring-2 ${isSelected ? 'ring-primary' : 'ring-slate-200'}`}>
-          <AvatarFallback className={`font-semibold ${isSelected ? 'bg-primary text-white' : 'bg-slate-100 text-slate-600'}`}>
+        <Avatar className={`h-11 w-11 ring-2 ${isSelected ? 'ring-blue-400' : 'ring-blue-200 dark:ring-blue-800'}`}>
+          <AvatarFallback className={`font-semibold ${isSelected ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-100'}`}>
             {parent.prenom?.[0]}{parent.nom?.[0]}
           </AvatarFallback>
         </Avatar>
         <div className="flex-1 min-w-0">
-          <p className={`font-semibold truncate ${isSelected ? 'text-primary' : 'text-slate-900'}`}>
+          <p className={`font-semibold truncate ${isSelected ? 'text-blue-700 dark:text-blue-300' : 'text-slate-900 dark:text-white'}`}>
             {parent.prenom} {parent.nom}
           </p>
-          <p className="text-xs text-slate-500 truncate">{parent.telephone}</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{parent.telephone}</p>
         </div>
         {canPredict ? (
-          <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-xs shrink-0">
+          <Badge className="bg-blue-100 text-blue-700 border-blue-200 text-xs shrink-0">
             Données OK
           </Badge>
         ) : (
-          <Badge variant="outline" className="bg-slate-50 text-slate-500 border-slate-200 text-xs shrink-0">
+          <Badge className="bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-800 dark:text-slate-400 text-xs shrink-0">
             Incomplet
           </Badge>
         )}
@@ -353,8 +380,14 @@ const ParentSelectCard: React.FC<{
 // ================================
 const PredictionRisquePage: React.FC = () => {
   const navigate = useNavigate();
+  const { decodedToken } = useDecodedToken();
   const { data: usersData, isLoading: isLoadingUsers } = useAllUsers();
+  const { data: currentUser } = useUserByEmail(decodedToken?.sub || '');
   const predictMutation = usePredictRisk();
+  const normalizedRole = (decodedToken?.role || '').replace(/^ROLE_/, '').toUpperCase();
+  const isInfirmier = normalizedRole === 'INFIRMIER';
+  const currentCentreId = currentUser?.centre?.id != null ? Number(currentUser.centre.id) : null;
+  const ownedIds = useMemo(() => readInfirmierOwnedIds(decodedToken?.sub), [decodedToken?.sub, usersData]);
 
   const [selectedParentId, setSelectedParentId] = useState<number | null>(null);
   const [predictionResult, setPredictionResult] = useState<PredictionResult | null>(null);
@@ -363,8 +396,19 @@ const PredictionRisquePage: React.FC = () => {
   // Récupérer les parents
   const parents = useMemo(() => {
     const users = Array.isArray(usersData) ? usersData : [];
-    return users.filter(u => u.userRole === UserRole.PARENT);
-  }, [usersData]);
+    const allParents = users.filter(u => u.userRole === UserRole.PARENT);
+    if (isInfirmier) {
+      if (ownedIds.parentIds.length > 0) {
+        return allParents.filter((p) => p.id != null && ownedIds.parentIds.includes(Number(p.id)));
+      }
+      // Fallback aligné sur l'onglet Parents pour les anciens comptes.
+      if (currentCentreId != null) {
+        return allParents.filter((p) => p.centre?.id != null && Number(p.centre.id) === currentCentreId);
+      }
+      return [];
+    }
+    return allParents;
+  }, [usersData, isInfirmier, ownedIds.parentIds, currentCentreId]);
 
   // Parent sélectionné
   const selectedParent = useMemo(() => {
@@ -426,75 +470,79 @@ const PredictionRisquePage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* === EN-TÊTE === */}
-      <div className="flex items-center justify-between">
+      {/* === EN-TÊTE AVEC GRADIENT === */}
+      <div className="bg-gradient-to-r from-blue-600 to-blue-500 px-8 py-12 rounded-lg shadow-2xl">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/medecin/patients')}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
-              <div className="p-2 bg-gradient-to-br from-primary to-primary/70 rounded-xl text-white">
-                <Activity className="h-6 w-6" />
-              </div>
-              Analyse de risque CPN
-            </h1>
-            <p className="text-slate-500 mt-1">
+          <div className="bg-white/20 p-3 rounded-xl">
+            <Activity className="h-8 w-8 text-white" />
+          </div>
+          <div className="text-white">
+            <h1 className="text-4xl font-black drop-shadow-lg">Analyse de risque CPN</h1>
+            <p className="text-blue-100 text-lg font-medium drop-shadow mt-2">
               Prédiction intelligente du niveau de risque vaccinal par parent
             </p>
           </div>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="ml-auto text-white hover:bg-blue-700/50"
+            onClick={() => navigate('/medecin/patients')}
+          >
+            <ArrowLeft className="h-6 w-6" />
+          </Button>
         </div>
       </div>
-
-      <Separator />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* === COLONNE GAUCHE : LISTE PARENTS === */}
         <div className="lg:col-span-4">
-          <Card className="shadow-lg sticky top-4">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Users className="h-5 w-5 text-primary" />
+          <Card className="shadow-lg sticky top-4 overflow-hidden border-0 dark:bg-slate-900">
+            {/* Header bleu */}
+            <div className="bg-gradient-to-r from-blue-600 to-blue-500 px-6 py-4">
+              <h3 className="text-white font-bold text-lg flex items-center gap-2">
+                <Users className="h-5 w-5" />
                 Sélectionner un parent
-              </CardTitle>
-              <div className="relative mt-2">
+              </h3>
+            </div>
+            <CardContent className="pt-4">
+              <div className="relative mb-4">
                 <input
                   type="text"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder="Rechercher un parent..."
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+                  className="w-full px-3 py-2 text-sm border border-blue-200 dark:border-blue-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-500 dark:bg-slate-800 dark:text-white"
                 />
               </div>
-            </CardHeader>
-            <CardContent className="max-h-[65vh] overflow-y-auto space-y-2 pt-0">
-              {isLoadingUsers ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} className="p-4 rounded-xl border border-slate-100">
-                    <div className="flex items-center gap-3">
-                      <Skeleton className="h-11 w-11 rounded-full" />
-                      <div className="space-y-2 flex-1">
-                        <Skeleton className="h-4 w-3/4" />
-                        <Skeleton className="h-3 w-1/2" />
+              <div className="max-h-[65vh] overflow-y-auto space-y-2">
+                {isLoadingUsers ? (
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <div key={i} className="p-4 rounded-xl border border-blue-100 dark:border-blue-800">
+                      <div className="flex items-center gap-3">
+                        <Skeleton className="h-11 w-11 rounded-full" />
+                        <div className="space-y-2 flex-1">
+                          <Skeleton className="h-4 w-3/4" />
+                          <Skeleton className="h-3 w-1/2" />
+                        </div>
                       </div>
                     </div>
+                  ))
+                ) : filteredParents.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Users className="h-10 w-10 mx-auto text-slate-300 mb-2" />
+                    <p className="text-sm text-slate-500">Aucun parent trouvé</p>
                   </div>
-                ))
-              ) : filteredParents.length === 0 ? (
-                <div className="text-center py-8">
-                  <Users className="h-10 w-10 mx-auto text-slate-300 mb-2" />
-                  <p className="text-sm text-slate-500">Aucun parent trouvé</p>
-                </div>
-              ) : (
-                filteredParents.map(parent => (
-                  <ParentSelectCard
-                    key={parent.id}
-                    parent={parent}
-                    isSelected={selectedParentId === parent.id}
-                    onClick={() => handleSelectParent(parent)}
-                  />
-                ))
-              )}
+                ) : (
+                  filteredParents.map(parent => (
+                    <ParentSelectCard
+                      key={parent.id}
+                      parent={parent}
+                      isSelected={selectedParentId === parent.id}
+                      onClick={() => handleSelectParent(parent)}
+                    />
+                  ))
+                )}
+              </div>
             </CardContent>
           </Card>
         </div>

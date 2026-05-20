@@ -8,7 +8,6 @@ import Enfant from './enfant';
 import Vaccination from './vaccination';
 import Vaccin from './vaccin';
 import RendezVous from './rendez-vous';
-import Centre from './centre';
 import Stock from './stock';
 import Statistique from './statistique';
 import Rapport from './rapport';
@@ -16,10 +15,16 @@ import Parametre from './parametre';
 import Message from './message';
 import AuthGuard from '@/helpers/auth-guard';
 import MedecinLayout from './layout';
+import { useDecodedToken } from '@/contexts/decoded-token-context';
 
 
 
 export default function MedecinRouter() {
+  const { decodedToken } = useDecodedToken();
+  const role = (decodedToken?.role || '').replace(/^ROLE_/, '').toUpperCase();
+  const isIcp = role === 'ICP';
+  const isInfirmier = role === 'INFIRMIER';
+
   return (
     <AuthGuard>
       <Routes>
@@ -27,20 +32,19 @@ export default function MedecinRouter() {
           <Route element={<MedecinLayout />}>
               {/* <Route index element={<Navigate to="/accueil" replace />} /> */}
               <Route path="accueil" element={<Dashboard />} />
-              <Route path="patients" element={<Patient />} />
-              <Route path="patient-details/:id" element={<PatientDetails />} />
-              <Route path="prediction-risque" element={<PredictionRisque />} />
-              <Route path="enfants" element={<Enfant />} />
-              <Route path="vaccinations" element={<Vaccination />} />
-              <Route path="vaccins" element={<Vaccin />} />
-              <Route path="rendez-vous" element={<RendezVous />} />
-              <Route path="calendrier" element={<Calendrier />} />
-              <Route path="centres" element={<Centre />} />
-              <Route path="stocks" element={<Stock />} />
-              <Route path="statistiques" element={<Statistique />} />
-              <Route path="rapports" element={<Rapport />} />
-              <Route path="parametres" element={<Parametre />} />
-              <Route path="messages" element={<Message />} />
+              {!isIcp && <Route path="patients" element={<Patient />} />}
+              {!isIcp && <Route path="patient-details/:id" element={<PatientDetails />} />}
+              {!isIcp && <Route path="prediction-risque" element={<PredictionRisque />} />}
+              {!isIcp && <Route path="enfants" element={<Enfant />} />}
+              {!isIcp && <Route path="vaccinations" element={<Vaccination />} />}
+              {!isInfirmier && <Route path="vaccins" element={<Vaccin />} />}
+              {!isIcp && <Route path="rendez-vous" element={<RendezVous />} />}
+              {!isIcp && <Route path="calendrier" element={<Calendrier />} />}
+              {!isIcp && !isInfirmier && <Route path="stocks" element={<Stock />} />}
+              {!isInfirmier && <Route path="statistiques" element={<Statistique />} />}
+              {!isIcp && !isInfirmier && <Route path="rapports" element={<Rapport />} />}
+              {!isIcp && !isInfirmier && <Route path="parametres" element={<Parametre />} />}
+              {!isIcp && !isInfirmier && <Route path="messages" element={<Message />} />}
 
               {/* Redirection par défaut */}
               <Route path="*" element={<Navigate to="/medecin/accueil" replace />} />

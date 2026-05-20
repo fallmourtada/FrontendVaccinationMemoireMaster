@@ -18,7 +18,6 @@ import {
   Heart,
   UserPlus,
   Eye,
-  Filter,
   LayoutGrid,
   List,
   Loader2,
@@ -45,7 +44,6 @@ import {
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -90,9 +88,10 @@ import {
   useUpdateUser, 
   useDeleteUser,
   useAllEnfants,
-  useDeleteEnfant
+  useDeleteEnfant,
+  useUserByEmail
 } from '@/services/user.service';
-import { useUser } from '@/contexts/user-context';
+import { useDecodedToken } from '@/contexts/decoded-token-context';
 import { 
   type UtilisateurDTO, 
   type SaveParentDTO, 
@@ -265,65 +264,44 @@ const ParentCard: React.FC<ParentCardProps> = ({
   onViewEnfant
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
-  
-  const getInitials = (prenom?: string, nom?: string) => {
-    return `${prenom?.[0] || ''}${nom?.[0] || ''}`.toUpperCase();
-  };
-
-  const getStatutColor = (statut?: string | null) => {
-    if (!statut) return 'bg-gray-100 text-gray-700';
-    if (statut.includes('MARIÉ')) return 'bg-green-100 text-green-700';
-    if (statut.includes('CÉLIBATAIRE')) return 'bg-blue-100 text-blue-700';
-    if (statut.includes('DIVORCÉ')) return 'bg-orange-100 text-orange-700';
-    if (statut.includes('VEUF')) return 'bg-purple-100 text-purple-700';
-    return 'bg-gray-100 text-gray-700';
-  };
 
   return (
-    <Card className="overflow-hidden hover:shadow-lg transition-all duration-300 border-slate-200 group">
-      {/* Header avec gradient */}
-      <div className="bg-gradient-to-r from-primary/5 via-primary/10 to-primary/5 p-4 border-b border-slate-100">
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-4">
-            <Avatar className="h-14 w-14 ring-4 ring-white shadow-md">
-              <AvatarFallback className="bg-gradient-to-br from-primary to-primary/70 text-white text-lg font-semibold">
-                {getInitials(parent.prenom, parent.nom)}
+    <Card className="overflow-hidden hover:shadow-xl transition-all duration-300 border-0 bg-white dark:bg-slate-900">
+      {/* Header avec gradient bleu professionnel */}
+      <div className="bg-gradient-to-r from-blue-600 to-blue-500 px-6 py-4">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-4 flex-1">
+            <Avatar className="h-14 w-14 border-3 border-white shadow-lg">
+              <AvatarFallback className="bg-white text-blue-600 font-bold text-lg">
+                {parent.prenom?.[0]}{parent.nom?.[0]}
               </AvatarFallback>
             </Avatar>
-            <div>
-              <h3 className="text-lg font-semibold text-slate-900 group-hover:text-primary transition-colors">
-                {parent.prenom} {parent.nom}
-              </h3>
-              <div className="flex items-center gap-2 mt-1">
-                {parent.statutMatrimonial && (
-                  <Badge variant="secondary" className={`text-xs ${getStatutColor(parent.statutMatrimonial)}`}>
-                    {parent.statutMatrimonial}
-                  </Badge>
-                )}
-                {parent.age && (
-                  <span className="text-sm text-slate-500">{parent.age} ans</span>
-                )}
-              </div>
-              <div className="mt-1">
-                <RiskPredictionBadge parent={parent} />
-              </div>
+            <div className="flex-1 text-white min-w-0">
+              <p className="font-bold text-lg leading-none">{parent.prenom} {parent.nom}</p>
+              <p className="text-sm text-blue-100 mt-1">
+                {parent.age ? `${parent.age} ans` : 'Âge non renseigné'}
+              </p>
+              {parent.statutMatrimonial && (
+                <Badge className="mt-1 bg-white/20 text-white border-white/30 text-xs">
+                  {parent.statutMatrimonial}
+                </Badge>
+              )}
             </div>
           </div>
           
-          {/* Actions rapides */}
-          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex items-center gap-1 flex-shrink-0">
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onView(parent)}>
+                  <Button variant="ghost" size="icon" className="text-white hover:bg-blue-700/50 h-8 w-8" onClick={() => onView(parent)}>
                     <Eye className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>Voir les détails</TooltipContent>
+                <TooltipContent>Voir détails</TooltipContent>
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEdit(parent)}>
+                  <Button variant="ghost" size="icon" className="text-white hover:bg-blue-700/50 h-8 w-8" onClick={() => onEdit(parent)}>
                     <Edit className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
@@ -331,8 +309,8 @@ const ParentCard: React.FC<ParentCardProps> = ({
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-red-50" onClick={() => onDelete(parent)}>
-                    <Trash2 className="h-4 w-4 text-red-500" />
+                  <Button variant="ghost" size="icon" className="text-white hover:bg-red-500/50 h-8 w-8" onClick={() => onDelete(parent)}>
+                    <Trash2 className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>Supprimer</TooltipContent>
@@ -342,66 +320,102 @@ const ParentCard: React.FC<ParentCardProps> = ({
         </div>
       </div>
 
-      {/* Informations de contact */}
-      <CardContent className="p-4 space-y-3">
-        <div className="grid grid-cols-1 gap-2 text-sm">
-          {parent.telephone && (
-            <div className="flex items-center gap-2 text-slate-600">
-              <Phone className="h-4 w-4 text-slate-400" />
-              <span>{parent.telephone}</span>
-            </div>
-          )}
-          {parent.email && (
-            <div className="flex items-center gap-2 text-slate-600">
-              <Mail className="h-4 w-4 text-slate-400" />
-              <span className="truncate">{parent.email}</span>
-            </div>
-          )}
-          {parent.adresse && (
-            <div className="flex items-center gap-2 text-slate-600">
-              <MapPin className="h-4 w-4 text-slate-400" />
-              <span className="truncate">{parent.adresse}</span>
-            </div>
-          )}
-          {parent.groupeSanguin && (
-            <div className="flex items-center gap-2 text-slate-600">
-              <Droplets className="h-4 w-4 text-red-400" />
-              <span>Groupe sanguin: {parent.groupeSanguin}</span>
-            </div>
-          )}
-          {parent.langueMaternelle && (
-            <div className="flex items-center gap-2 text-slate-600">
-              <Globe className="h-4 w-4 text-indigo-400" />
-              <span>Langue: {parent.langueMaternelle}</span>
-            </div>
-          )}
-          {parent.zoneResidence && (
-            <div className="flex items-center gap-2 text-slate-600">
-              <Home className="h-4 w-4 text-emerald-400" />
-              <span>Zone: {parent.zoneResidence}</span>
-            </div>
-          )}
+      <CardContent className="p-6 space-y-5">
+        {/* Infos essentielles */}
+        <div className="space-y-3">
+          <p className="text-xs font-bold text-blue-700 dark:text-blue-400 uppercase tracking-widest">Informations</p>
+          
+          <div className="space-y-2">
+            {parent.telephone && (
+              <div className="flex items-center gap-3 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-100 dark:border-blue-800">
+                <Phone className="h-4 w-4 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+                <div>
+                  <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">Téléphone</p>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-white">{parent.telephone}</p>
+                </div>
+              </div>
+            )}
+
+            {parent.email && (
+              <div className="flex items-center gap-3 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-100 dark:border-blue-800">
+                <Mail className="h-4 w-4 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+                <div>
+                  <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">Email</p>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{parent.email}</p>
+                </div>
+              </div>
+            )}
+
+            {parent.adresse && (
+              <div className="flex items-center gap-3 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-100 dark:border-blue-800">
+                <MapPin className="h-4 w-4 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+                <div>
+                  <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">Adresse</p>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{parent.adresse}</p>
+                </div>
+              </div>
+            )}
+
+            {(parent.groupeSanguin || parent.langueMaternelle) && (
+              <div className="flex gap-2">
+                {parent.groupeSanguin && (
+                  <div className="flex-1 flex items-center gap-3 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-100 dark:border-blue-800">
+                    <Droplets className="h-4 w-4 text-red-500 flex-shrink-0" />
+                    <div>
+                      <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">Groupe sanguin</p>
+                      <p className="text-sm font-semibold text-gray-900 dark:text-white">{parent.groupeSanguin}</p>
+                    </div>
+                  </div>
+                )}
+                {parent.langueMaternelle && (
+                  <div className="flex-1 flex items-center gap-3 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-100 dark:border-blue-800">
+                    <Globe className="h-4 w-4 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+                    <div>
+                      <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">Langue</p>
+                      <p className="text-sm font-semibold text-gray-900 dark:text-white">{parent.langueMaternelle}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {parent.zoneResidence && (
+              <div className="flex items-center gap-3 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-100 dark:border-blue-800">
+                <Home className="h-4 w-4 text-teal-500 flex-shrink-0" />
+                <div>
+                  <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">Zone Résidence</p>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-white">{parent.zoneResidence}</p>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
-        <Separator className="my-3" />
+        {/* Évaluation de risque */}
+        <div className="flex items-center justify-between pt-2">
+          <span className="text-xs font-bold text-blue-700 dark:text-blue-400 uppercase tracking-widest">Évaluation</span>
+          <RiskPredictionBadge parent={parent} />
+        </div>
+
+        <div className="h-px bg-gradient-to-r from-transparent via-blue-200 to-transparent dark:via-blue-800"></div>
 
         {/* Section Enfants */}
         <div>
           <button 
-            className="flex items-center justify-between w-full text-left hover:bg-slate-50 -mx-2 px-2 py-2 rounded-md transition-colors"
+            className="flex items-center justify-between w-full text-left hover:bg-blue-50 dark:hover:bg-blue-950/20 -mx-2 px-2 py-2 rounded-md transition-colors"
             onClick={() => setIsExpanded(!isExpanded)}
           >
             <div className="flex items-center gap-2">
-              <Baby className="h-4 w-4 text-primary" />
-              <span className="font-medium text-slate-700">Enfants</span>
-              <Badge variant="secondary" className="ml-1 h-5 px-2">
+              <Baby className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              <span className="font-medium text-slate-700 dark:text-slate-300">Enfants</span>
+              <Badge className="ml-1 h-5 px-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800">
                 {enfants.length}
               </Badge>
             </div>
             {isExpanded ? (
-              <ChevronUp className="h-4 w-4 text-slate-400" />
+              <ChevronUp className="h-4 w-4 text-blue-400" />
             ) : (
-              <ChevronDown className="h-4 w-4 text-slate-400" />
+              <ChevronDown className="h-4 w-4 text-blue-400" />
             )}
           </button>
 
@@ -418,7 +432,7 @@ const ParentCard: React.FC<ParentCardProps> = ({
                   />
                 ))
               ) : (
-                <div className="text-center py-4 text-slate-500 bg-slate-50 rounded-lg">
+                <div className="text-center py-4 text-slate-500 bg-blue-50 dark:bg-blue-950/20 rounded-lg">
                   <Baby className="h-8 w-8 mx-auto mb-2 text-slate-300" />
                   <p className="text-sm">Aucun enfant enregistré</p>
                 </div>
@@ -429,10 +443,10 @@ const ParentCard: React.FC<ParentCardProps> = ({
       </CardContent>
 
       {/* Footer avec bouton Ajouter enfant */}
-      <CardFooter className="bg-slate-50 border-t border-slate-100 p-3">
+      <CardFooter className="bg-blue-50 dark:bg-blue-950/20 border-t border-blue-100 dark:border-blue-800 p-3">
         <Button 
           variant="outline" 
-          className="w-full gap-2 hover:bg-primary hover:text-white hover:border-primary transition-all"
+          className="w-full gap-2 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-all"
           onClick={() => onAddEnfant(parent)}
         >
           <UserPlus className="h-4 w-4" />
@@ -448,7 +462,7 @@ const ParentCard: React.FC<ParentCardProps> = ({
 // ================================
 const ParentCardSkeleton = () => (
   <Card className="overflow-hidden">
-    <div className="bg-slate-100 p-4 border-b">
+    <div className="bg-blue-600 p-4">
       <div className="flex items-center gap-4">
         <Skeleton className="h-14 w-14 rounded-full" />
         <div className="space-y-2">
@@ -457,12 +471,12 @@ const ParentCardSkeleton = () => (
         </div>
       </div>
     </div>
-    <CardContent className="p-4 space-y-3">
+    <CardContent className="p-6 space-y-3">
       <Skeleton className="h-4 w-full" />
       <Skeleton className="h-4 w-3/4" />
       <Skeleton className="h-4 w-1/2" />
     </CardContent>
-    <CardFooter className="bg-slate-50 border-t p-3">
+    <CardFooter className="bg-blue-50 border-t p-3">
       <Skeleton className="h-10 w-full" />
     </CardFooter>
   </Card>
@@ -554,6 +568,47 @@ const initialEnfantForm: EnfantFormData = {
   taille: undefined,
 };
 
+const normalizeRole = (role?: string | null) => (role || '').replace(/^ROLE_/, '').toUpperCase();
+
+type InfirmierOwnedIds = {
+  parentIds: number[];
+  enfantIds: number[];
+  appointmentIds: number[];
+  vaccinationIds: number[];
+};
+
+const INFIRMIER_OWNERSHIP_PREFIX = 'infirmier-owned-records:';
+
+const readInfirmierOwnedIds = (email?: string | null): InfirmierOwnedIds => {
+  if (!email) {
+    return { parentIds: [], enfantIds: [], appointmentIds: [], vaccinationIds: [] };
+  }
+  try {
+    const raw = localStorage.getItem(`${INFIRMIER_OWNERSHIP_PREFIX}${email.toLowerCase()}`);
+    if (!raw) {
+      return { parentIds: [], enfantIds: [], appointmentIds: [], vaccinationIds: [] };
+    }
+    const parsed = JSON.parse(raw) as Partial<InfirmierOwnedIds>;
+    return {
+      parentIds: Array.isArray(parsed.parentIds) ? parsed.parentIds : [],
+      enfantIds: Array.isArray(parsed.enfantIds) ? parsed.enfantIds : [],
+      appointmentIds: Array.isArray(parsed.appointmentIds) ? parsed.appointmentIds : [],
+      vaccinationIds: Array.isArray(parsed.vaccinationIds) ? parsed.vaccinationIds : [],
+    };
+  } catch {
+    return { parentIds: [], enfantIds: [], appointmentIds: [], vaccinationIds: [] };
+  }
+};
+
+const addOwnedId = (email: string | undefined, key: keyof InfirmierOwnedIds, id: number | null | undefined) => {
+  if (!email || !id) return;
+  const existing = readInfirmierOwnedIds(email);
+  if (!existing[key].includes(id)) {
+    const next = { ...existing, [key]: [...existing[key], id] };
+    localStorage.setItem(`${INFIRMIER_OWNERSHIP_PREFIX}${email.toLowerCase()}`, JSON.stringify(next));
+  }
+};
+
 // ================================
 // HOOK DYNAMIQUE POUR CRÉER UN ENFANT
 // ================================
@@ -582,6 +637,7 @@ const useCreateEnfantDynamic = () => {
 // ================================
 const PatientPage: React.FC = () => {
   const navigate = useNavigate();
+  const { decodedToken } = useDecodedToken();
 
   // States
   const [searchTerm, setSearchTerm] = useState('');
@@ -609,13 +665,17 @@ const PatientPage: React.FC = () => {
   const [isEditingParent, setIsEditingParent] = useState(false);
   const [isEditingEnfant, setIsEditingEnfant] = useState(false);
 
-  // Contexte utilisateur pour récupérer le centreId
-  const { user } = useUser();
-  const centreId = user?.centre?.id ?? 1; // Default to 1 if not available
+  // Utilisateur connecté (réel) pour filtrage par rôle/centre
+  const { data: currentUser } = useUserByEmail(decodedToken?.sub || '');
+  const centreId = currentUser?.centre?.id ?? 0;
+  const normalizedRole = normalizeRole(decodedToken?.role);
+  const isInfirmier = normalizedRole === 'INFIRMIER';
 
   // API Hooks
   const { data: usersData, isLoading: isLoadingUsers, error: usersError, refetch: refetchUsers } = useAllUsers();
   const { data: enfantsData, isLoading: isLoadingEnfants, refetch: refetchEnfants } = useAllEnfants();
+  const ownedIds = useMemo(() => readInfirmierOwnedIds(decodedToken?.sub), [decodedToken?.sub, usersData, enfantsData]);
+  const currentCentreId = currentUser?.centre?.id != null ? Number(currentUser.centre.id) : null;
   
   const createParentMutation = useCreateParent(centreId);
   const updateUserMutation = useUpdateUser();
@@ -625,13 +685,36 @@ const PatientPage: React.FC = () => {
   // Récupération des parents uniquement
   const parents = useMemo(() => {
     const users = Array.isArray(usersData) ? usersData : [];
-    return users.filter(user => user.userRole === UserRole.PARENT);
-  }, [usersData]);
+    const allParents = users.filter(user => user.userRole === UserRole.PARENT);
+    if (isInfirmier) {
+      if (ownedIds.parentIds.length > 0) {
+        return allParents.filter((p) => p.id != null && ownedIds.parentIds.includes(Number(p.id)));
+      }
+      // Fallback pour comptes existants: parents du même centre que l'infirmier.
+      if (currentCentreId != null) {
+        return allParents.filter((p) => p.centre?.id != null && Number(p.centre.id) === currentCentreId);
+      }
+      return [];
+    }
+    return allParents;
+  }, [usersData, isInfirmier, ownedIds.parentIds, currentCentreId]);
 
   // Tous les enfants
   const allEnfants = useMemo(() => {
-    return Array.isArray(enfantsData) ? enfantsData : [];
-  }, [enfantsData]);
+    const enfants = Array.isArray(enfantsData) ? enfantsData : [];
+    if (isInfirmier) {
+      const visibleParentIds = parents.map((p) => Number(p.id)).filter((id) => Number.isFinite(id));
+      return enfants.filter((enfant) => {
+        const enfantId = enfant.id != null ? Number(enfant.id) : null;
+        const parentId = enfant.parent?.id != null ? Number(enfant.parent.id) : null;
+        return (
+          (enfantId != null && ownedIds.enfantIds.includes(enfantId)) ||
+          (parentId != null && (ownedIds.parentIds.includes(parentId) || visibleParentIds.includes(parentId)))
+        );
+      });
+    }
+    return enfants;
+  }, [enfantsData, isInfirmier, ownedIds.enfantIds, ownedIds.parentIds, parents]);
 
   // Fonction pour obtenir les enfants d'un parent
   const getEnfantsForParent = useCallback((parentId: number | null) => {
@@ -773,6 +856,10 @@ const PatientPage: React.FC = () => {
         await updateUserMutation.mutateAsync(updateData);
         toast.success('Parent modifié avec succès');
       } else {
+        if (!centreId) {
+          toast.error('Centre utilisateur introuvable. Veuillez vous reconnecter.');
+          return;
+        }
         const createData: SaveParentDTO = {
           prenom: parentForm.prenom,
           nom: parentForm.nom,
@@ -804,6 +891,7 @@ const PatientPage: React.FC = () => {
         };
         const newParent = await createParentMutation.mutateAsync(createData);
         toast.success('Parent créé avec succès');
+        addOwnedId(decodedToken?.sub, 'parentIds', newParent?.id ?? null);
 
         // Ouvrir le dialog de prédiction si les données le permettent
         if (newParent) {
@@ -907,8 +995,9 @@ const PatientPage: React.FC = () => {
           taille: enfantForm.taille,
           parentId: parentForNewEnfant.id,
         };
-        await createEnfantMutation.mutateAsync(createData);
+        const enfantResult = await createEnfantMutation.mutateAsync(createData);
         toast.success('Enfant ajouté avec succès');
+        addOwnedId(decodedToken?.sub, 'enfantIds', enfantResult?.id ?? null);
       }
       
       setIsEnfantModalOpen(false);
@@ -932,15 +1021,22 @@ const PatientPage: React.FC = () => {
   // Loading state
   if (isLoadingUsers || isLoadingEnfants) {
     return (
-      <div className="p-6 space-y-6">
-        <div className="flex justify-between items-center">
-          <Skeleton className="h-10 w-64" />
-          <Skeleton className="h-10 w-40" />
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-950 dark:to-blue-950">
+        <div className="bg-gradient-to-r from-blue-600 via-blue-500 to-blue-400 px-6 py-12 sm:px-8 lg:px-12 shadow-2xl">
+          <Skeleton className="h-12 w-64 mb-2" />
+          <Skeleton className="h-6 w-96" />
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[1, 2, 3, 4, 5, 6].map(i => (
-            <ParentCardSkeleton key={i} />
-          ))}
+        <div className="max-w-7xl mx-auto px-6 py-8 sm:px-8 lg:px-12">
+          <div className="grid gap-4 md:grid-cols-3 mb-8">
+            {[1, 2, 3].map(i => (
+              <Skeleton key={i} className="h-32" />
+            ))}
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[1, 2, 3, 4, 5, 6].map(i => (
+              <ParentCardSkeleton key={i} />
+            ))}
+          </div>
         </div>
       </div>
     );
@@ -949,102 +1045,120 @@ const PatientPage: React.FC = () => {
   // Error state
   if (usersError) {
     return (
-      <div className="p-6">
-        <Card className="border-red-200 bg-red-50">
-          <CardContent className="flex items-center gap-4 p-6">
-            <AlertCircle className="h-8 w-8 text-red-500" />
-            <div>
-              <h3 className="font-semibold text-red-800">Erreur de chargement</h3>
-              <p className="text-red-600">Impossible de charger les données des parents.</p>
-              <Button variant="outline" className="mt-2" onClick={() => refetchUsers()}>
-                Réessayer
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-950 dark:to-blue-950">
+        <div className="bg-gradient-to-r from-blue-600 via-blue-500 to-blue-400 px-6 py-12 sm:px-8 lg:px-12 shadow-2xl">
+          <h1 className="text-4xl sm:text-5xl font-black text-white drop-shadow-lg">Gestion des Parents</h1>
+        </div>
+        <div className="max-w-7xl mx-auto px-6 py-8 sm:px-8 lg:px-12">
+          <Card className="border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/20">
+            <CardContent className="flex items-center gap-4 p-6">
+              <AlertCircle className="h-8 w-8 text-red-500" />
+              <div>
+                <h3 className="font-semibold text-red-800 dark:text-red-300">Erreur de chargement</h3>
+                <p className="text-red-600 dark:text-red-400">Impossible de charger les données des parents.</p>
+                <Button variant="outline" className="mt-2" onClick={() => refetchUsers()}>
+                  Réessayer
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="p-6 space-y-6 bg-gradient-to-br from-slate-50 to-white min-h-screen">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
-            <div className="p-2 bg-primary/10 rounded-lg">
-              <Users className="h-8 w-8 text-primary" />
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-950 dark:to-blue-950">
+      {/* Header Magnifique */}
+      <div className="bg-gradient-to-r from-blue-600 via-blue-500 to-blue-400 px-6 py-12 sm:px-8 lg:px-12 shadow-2xl">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <h1 className="text-4xl sm:text-5xl font-black text-white mb-3 drop-shadow-lg">
+                Gestion des Parents
+              </h1>
+              <p className="text-lg text-blue-50 font-medium drop-shadow">
+                Gérez les dossiers des parents et de leurs enfants
+              </p>
             </div>
-            Gestion des Parents
-          </h1>
-          <p className="text-slate-500 mt-1">
-            Gérez les parents et leurs enfants
-          </p>
+            <Button 
+              onClick={handleOpenCreateParent}
+              className="bg-white text-blue-600 hover:bg-blue-50 font-semibold shadow-lg ml-4 hidden sm:flex"
+            >
+              <Plus className="h-5 w-5 mr-2" />
+              Nouveau Parent
+            </Button>
+          </div>
         </div>
-        <Button 
-          onClick={handleOpenCreateParent}
-          className="gap-2 shadow-lg hover:shadow-xl transition-shadow"
-          size="lg"
-        >
-          <Plus className="h-5 w-5" />
-          Nouveau Parent
-        </Button>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="bg-gradient-to-br from-blue-500 to-blue-600 text-white border-0">
-          <CardContent className="p-4 flex items-center gap-4">
-            <div className="p-3 bg-white/20 rounded-lg">
-              <Users className="h-6 w-6" />
-            </div>
-            <div>
-              <p className="text-blue-100 text-sm">Total Parents</p>
-              <p className="text-2xl font-bold">{stats.totalParents}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-gradient-to-br from-pink-500 to-pink-600 text-white border-0">
-          <CardContent className="p-4 flex items-center gap-4">
-            <div className="p-3 bg-white/20 rounded-lg">
-              <Baby className="h-6 w-6" />
-            </div>
-            <div>
-              <p className="text-pink-100 text-sm">Total Enfants</p>
-              <p className="text-2xl font-bold">{stats.totalEnfants}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-gradient-to-br from-purple-500 to-purple-600 text-white border-0">
-          <CardContent className="p-4 flex items-center gap-4">
-            <div className="p-3 bg-white/20 rounded-lg">
-              <Heart className="h-6 w-6" />
-            </div>
-            <div>
-              <p className="text-purple-100 text-sm">Moyenne Enfants/Parent</p>
-              <p className="text-2xl font-bold">{stats.avgEnfantsPerParent}</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-6 py-8 sm:px-8 lg:px-12">
 
-      {/* Filters & Search */}
-      <Card className="border-slate-200">
-        <CardContent className="p-4">
-          <div className="flex flex-col md:flex-row gap-4 items-center">
-            <div className="relative flex-1 w-full">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+        {/* Cartes statistiques */}
+        <div className="grid gap-4 md:grid-cols-3 mb-8">
+          <Card className="group relative bg-gradient-to-br from-blue-50 to-white dark:from-blue-950/30 dark:to-slate-900 border-blue-200 dark:border-blue-800 hover:shadow-xl transition-all duration-300 overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-r from-blue-600/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
+              <CardTitle className="text-sm font-bold text-blue-700 dark:text-blue-400 uppercase tracking-widest">Total Parents</CardTitle>
+              <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                <Users className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              </div>
+            </CardHeader>
+            <CardContent className="relative z-10">
+              <div className="text-4xl font-black text-blue-700 dark:text-blue-300">{stats.totalParents}</div>
+              <p className="text-xs text-blue-600/70 dark:text-blue-400/70 mt-2 font-medium">Parents enregistrés</p>
+            </CardContent>
+          </Card>
+
+          <Card className="group relative bg-gradient-to-br from-pink-50 to-white dark:from-pink-950/30 dark:to-slate-900 border-pink-200 dark:border-pink-800 hover:shadow-xl transition-all duration-300 overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-r from-pink-600/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
+              <CardTitle className="text-sm font-bold text-pink-700 dark:text-pink-400 uppercase tracking-widest">Total Enfants</CardTitle>
+              <div className="p-2 bg-pink-100 dark:bg-pink-900/30 rounded-lg">
+                <Baby className="h-5 w-5 text-pink-600 dark:text-pink-400" />
+              </div>
+            </CardHeader>
+            <CardContent className="relative z-10">
+              <div className="text-4xl font-black text-pink-700 dark:text-pink-300">{stats.totalEnfants}</div>
+              <p className="text-xs text-pink-600/70 dark:text-pink-400/70 mt-2 font-medium">Enfants enregistrés</p>
+            </CardContent>
+          </Card>
+
+          <Card className="group relative bg-gradient-to-br from-green-50 to-white dark:from-green-950/30 dark:to-slate-900 border-green-200 dark:border-green-800 hover:shadow-xl transition-all duration-300 overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-r from-green-600/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
+              <CardTitle className="text-sm font-bold text-green-700 dark:text-green-400 uppercase tracking-widest">Moyenne Enfants</CardTitle>
+              <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
+                <Heart className="h-5 w-5 text-green-600 dark:text-green-400" />
+              </div>
+            </CardHeader>
+            <CardContent className="relative z-10">
+              <div className="text-4xl font-black text-green-700 dark:text-green-300">{stats.avgEnfantsPerParent}</div>
+              <p className="text-xs text-green-600/70 dark:text-green-400/70 mt-2 font-medium">Par parent</p>
+            </CardContent>
+          </Card>
+        </div>
+
+      {/* Barre d'actions */}
+      <Card className="mb-6 bg-white dark:bg-slate-900 border-blue-200 dark:border-blue-800">
+        <CardContent className="pt-6">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            {/* Recherche */}
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-blue-500" />
               <Input
                 placeholder="Rechercher un parent..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 w-full"
+                className="pl-10 border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200"
               />
             </div>
-            <div className="flex items-center gap-2 w-full md:w-auto">
+
+            {/* Filtres et actions */}
+            <div className="flex flex-wrap gap-2 justify-end">
               <Select value={filterStatut} onValueChange={setFilterStatut}>
-                <SelectTrigger className="w-full md:w-[180px]">
-                  <Filter className="h-4 w-4 mr-2" />
+                <SelectTrigger className="w-[180px] border-blue-200 dark:border-blue-800 hover:bg-blue-50 dark:hover:bg-blue-950/30">
                   <SelectValue placeholder="Statut" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1054,12 +1168,13 @@ const PatientPage: React.FC = () => {
                   ))}
                 </SelectContent>
               </Select>
-              <div className="flex border rounded-md">
+
+              <div className="flex border border-blue-200 dark:border-blue-800 rounded-md">
                 <Button
                   variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
                   size="icon"
                   onClick={() => setViewMode('grid')}
-                  className="rounded-r-none"
+                  className="rounded-r-none border-blue-200 dark:border-blue-800"
                 >
                   <LayoutGrid className="h-4 w-4" />
                 </Button>
@@ -1067,47 +1182,62 @@ const PatientPage: React.FC = () => {
                   variant={viewMode === 'list' ? 'secondary' : 'ghost'}
                   size="icon"
                   onClick={() => setViewMode('list')}
-                  className="rounded-l-none"
+                  className="rounded-l-none border-blue-200 dark:border-blue-800"
                 >
                   <List className="h-4 w-4" />
                 </Button>
               </div>
+
+              {!searchTerm && filterStatut === 'all' && (
+                <Button 
+                  onClick={handleOpenCreateParent}
+                  className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white font-semibold shadow-md hover:shadow-lg transition-all"
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Nouveau Parent
+                </Button>
+              )}
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Results count */}
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-slate-500">
-          {filteredParents.length} parent{filteredParents.length > 1 ? 's' : ''} trouvé{filteredParents.length > 1 ? 's' : ''}
-        </p>
-      </div>
-
       {/* Parents Grid/List */}
-      {filteredParents.length === 0 ? (
-        <Card className="border-dashed border-2 border-slate-200">
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <Users className="h-12 w-12 text-slate-300 mb-4" />
-            <h3 className="text-lg font-semibold text-slate-700">Aucun parent trouvé</h3>
-            <p className="text-slate-500 text-center mt-1">
-              {searchTerm || filterStatut !== 'all' 
-                ? 'Essayez de modifier vos critères de recherche'
-                : 'Commencez par ajouter un nouveau parent'}
-            </p>
+      {isLoadingUsers ? (
+        <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <ParentCardSkeleton key={i} />
+          ))}
+        </div>
+      ) : filteredParents.length === 0 ? (
+        <Card className="p-12 border-dashed border-2 border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/20">
+          <div className="flex flex-col items-center gap-4 text-center">
+            <div className="p-4 bg-blue-100 dark:bg-blue-900/30 rounded-full">
+              <Users className="h-12 w-12 text-blue-600 dark:text-blue-400" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Aucun parent trouvé</h3>
+              <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                {searchTerm || filterStatut !== 'all' 
+                  ? 'Essayez de modifier vos critères de recherche'
+                  : isInfirmier
+                    ? 'Aucun parent n’a été créé pour le moment sur votre espace'
+                    : 'Commencez par ajouter un nouveau parent'}
+              </p>
+            </div>
             {!searchTerm && filterStatut === 'all' && (
-              <Button onClick={handleOpenCreateParent} className="mt-4 gap-2">
-                <Plus className="h-4 w-4" />
+              <Button onClick={handleOpenCreateParent} className="mt-2">
+                <Plus className="mr-2 h-4 w-4" />
                 Ajouter un parent
               </Button>
             )}
-          </CardContent>
+          </div>
         </Card>
       ) : (
         <div className={
           viewMode === 'grid' 
             ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'
-            : 'space-y-4'
+            : 'space-y-6'
         }>
           {filteredParents.map((parent) => (
             <ParentCard
@@ -1125,81 +1255,91 @@ const PatientPage: React.FC = () => {
           ))}
         </div>
       )}
+      </div>
 
       {/* Modal Création/Modification Parent */}
       <Dialog open={isParentModalOpen} onOpenChange={setIsParentModalOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5 text-primary" />
-              {isEditingParent ? 'Modifier le parent' : 'Nouveau parent'}
-            </DialogTitle>
-            <DialogDescription>
-              {isEditingParent 
-                ? 'Modifiez les informations du parent'
-                : 'Remplissez les informations pour créer un nouveau parent'}
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto bg-white dark:bg-slate-900 border-0">
+          {/* Gradient Header */}
+          <div className="bg-gradient-to-r from-blue-600 to-blue-500 px-6 py-6 -mx-6 -mt-6 mb-6">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-white/20 rounded-lg">
+                <Users className="h-6 w-6 text-white" />
+              </div>
+              <div className="text-white">
+                <h2 className="text-2xl font-bold">{isEditingParent ? 'Modifier le parent' : 'Nouveau parent'}</h2>
+                <p className="text-blue-100 text-sm mt-1">
+                  {isEditingParent 
+                    ? 'Modifiez les informations du parent'
+                    : 'Remplissez les informations pour créer un nouveau parent'}
+                </p>
+              </div>
+            </div>
+          </div>
           
           <form onSubmit={handleSubmitParent}>
             <Tabs defaultValue="general" className="w-full">
-              <TabsList className="grid w-full grid-cols-4">
-                <TabsTrigger value="general">Général</TabsTrigger>
-                <TabsTrigger value="medical">Médical</TabsTrigger>
-                <TabsTrigger value="tuteurs">Tuteurs</TabsTrigger>
-                <TabsTrigger value="prediction">Prédiction</TabsTrigger>
+              <TabsList className="grid w-full grid-cols-4 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
+                <TabsTrigger value="general" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">Général</TabsTrigger>
+                <TabsTrigger value="medical" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">Médical</TabsTrigger>
+                <TabsTrigger value="tuteurs" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">Tuteurs</TabsTrigger>
+                <TabsTrigger value="prediction" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">Prédiction</TabsTrigger>
               </TabsList>
               
               <TabsContent value="general" className="space-y-4 mt-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="prenom">Prénom *</Label>
+                    <Label htmlFor="prenom" className="text-slate-700 dark:text-slate-300 font-semibold">Prénom *</Label>
                     <Input
                       id="prenom"
                       value={parentForm.prenom}
                       onChange={(e) => setParentForm({...parentForm, prenom: e.target.value})}
                       placeholder="Prénom"
                       required
+                      className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="nom">Nom *</Label>
+                    <Label htmlFor="nom" className="text-slate-700 dark:text-slate-300 font-semibold">Nom *</Label>
                     <Input
                       id="nom"
                       value={parentForm.nom}
                       onChange={(e) => setParentForm({...parentForm, nom: e.target.value})}
                       placeholder="Nom"
                       required
+                      className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900"
                     />
                   </div>
                 </div>
                 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="telephone">Téléphone *</Label>
+                    <Label htmlFor="telephone" className="text-slate-700 dark:text-slate-300 font-semibold">Téléphone *</Label>
                     <Input
                       id="telephone"
                       value={parentForm.telephone}
                       onChange={(e) => setParentForm({...parentForm, telephone: e.target.value})}
                       placeholder="Téléphone"
                       required
+                      className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
+                    <Label htmlFor="email" className="text-slate-700 dark:text-slate-300 font-semibold">Email</Label>
                     <Input
                       id="email"
                       type="email"
                       value={parentForm.email}
                       onChange={(e) => setParentForm({...parentForm, email: e.target.value})}
                       placeholder="Email"
+                      className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900"
                     />
                   </div>
                 </div>
 
                 {!isEditingParent && (
                   <div className="space-y-2">
-                    <Label htmlFor="password">Mot de passe *</Label>
+                    <Label htmlFor="password" className="text-slate-700 dark:text-slate-300 font-semibold">Mot de passe *</Label>
                     <Input
                       id="password"
                       type="password"
@@ -1207,28 +1347,30 @@ const PatientPage: React.FC = () => {
                       onChange={(e) => setParentForm({...parentForm, password: e.target.value})}
                       placeholder="Mot de passe"
                       required
+                      className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900"
                     />
                   </div>
                 )}
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="age">Âge</Label>
+                    <Label htmlFor="age" className="text-slate-700 dark:text-slate-300 font-semibold">Âge</Label>
                     <Input
                       id="age"
                       type="number"
                       value={parentForm.age || ''}
                       onChange={(e) => setParentForm({...parentForm, age: e.target.value ? parseInt(e.target.value) : undefined})}
                       placeholder="Âge"
+                      className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="statutMatrimonial">Statut matrimonial</Label>
+                    <Label htmlFor="statutMatrimonial" className="text-slate-700 dark:text-slate-300 font-semibold">Statut matrimonial</Label>
                     <Select 
                       value={parentForm.statutMatrimonial} 
                       onValueChange={(value) => setParentForm({...parentForm, statutMatrimonial: value})}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900">
                         <SelectValue placeholder="Sélectionner" />
                       </SelectTrigger>
                       <SelectContent>
@@ -1241,32 +1383,34 @@ const PatientPage: React.FC = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="adresse">Adresse</Label>
+                  <Label htmlFor="adresse" className="text-slate-700 dark:text-slate-300 font-semibold">Adresse</Label>
                   <Input
                     id="adresse"
                     value={parentForm.adresse}
                     onChange={(e) => setParentForm({...parentForm, adresse: e.target.value})}
                     placeholder="Adresse complète"
+                    className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="profession">Profession</Label>
+                    <Label htmlFor="profession" className="text-slate-700 dark:text-slate-300 font-semibold">Profession</Label>
                     <Input
                       id="profession"
                       value={parentForm.profession}
                       onChange={(e) => setParentForm({...parentForm, profession: e.target.value})}
                       placeholder="Profession"
+                      className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="niveauEtude">Niveau d'étude</Label>
+                    <Label htmlFor="niveauEtude" className="text-slate-700 dark:text-slate-300 font-semibold">Niveau d'étude</Label>
                     <Select
                       value={parentForm.niveauEtude}
                       onValueChange={(value) => setParentForm({...parentForm, niveauEtude: value})}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900">
                         <SelectValue placeholder="Sélectionner" />
                       </SelectTrigger>
                       <SelectContent>
@@ -1279,12 +1423,12 @@ const PatientPage: React.FC = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="langueMaternelle">Langue maternelle</Label>
+                  <Label htmlFor="langueMaternelle" className="text-slate-700 dark:text-slate-300 font-semibold">Langue maternelle</Label>
                   <Select
                     value={parentForm.langueMaternelle}
                     onValueChange={(value) => setParentForm({...parentForm, langueMaternelle: value})}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900">
                       <SelectValue placeholder="Sélectionner la langue" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1298,12 +1442,12 @@ const PatientPage: React.FC = () => {
               
               <TabsContent value="medical" className="space-y-4 mt-4">
                 <div className="space-y-2">
-                  <Label htmlFor="groupeSanguin">Groupe sanguin</Label>
+                  <Label htmlFor="groupeSanguin" className="text-slate-700 dark:text-slate-300 font-semibold">Groupe sanguin</Label>
                   <Select 
                     value={parentForm.groupeSanguin} 
                     onValueChange={(value) => setParentForm({...parentForm, groupeSanguin: value as GroupeSanguinEnum})}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900">
                       <SelectValue placeholder="Sélectionner" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1315,32 +1459,34 @@ const PatientPage: React.FC = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="allergies">Allergies</Label>
+                  <Label htmlFor="allergies" className="text-slate-700 dark:text-slate-300 font-semibold">Allergies</Label>
                   <Textarea
                     id="allergies"
                     value={parentForm.allergies}
                     onChange={(e) => setParentForm({...parentForm, allergies: e.target.value})}
                     placeholder="Liste des allergies connues"
                     rows={3}
+                    className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="antecedentsMedicaux">Antécédents médicaux</Label>
+                  <Label htmlFor="antecedentsMedicaux" className="text-slate-700 dark:text-slate-300 font-semibold">Antécédents médicaux</Label>
                   <Textarea
                     id="antecedentsMedicaux"
                     value={parentForm.antecedentsMedicaux}
                     onChange={(e) => setParentForm({...parentForm, antecedentsMedicaux: e.target.value})}
                     placeholder="Antécédents médicaux importants"
                     rows={3}
+                    className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900"
                   />
                 </div>
               </TabsContent>
               
               <TabsContent value="tuteurs" className="space-y-4 mt-4">
-                <Card className="border-dashed">
+                <Card className="border-dashed border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/20">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium">Tuteur 1</CardTitle>
+                    <CardTitle className="text-sm font-medium text-blue-700 dark:text-blue-300">Tuteur 1</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3">
                     <div className="grid grid-cols-2 gap-3">
@@ -1348,24 +1494,27 @@ const PatientPage: React.FC = () => {
                         placeholder="Prénom"
                         value={parentForm.prenomTuteur1}
                         onChange={(e) => setParentForm({...parentForm, prenomTuteur1: e.target.value})}
+                        className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900"
                       />
                       <Input
                         placeholder="Nom"
                         value={parentForm.nomTuteur1}
                         onChange={(e) => setParentForm({...parentForm, nomTuteur1: e.target.value})}
+                        className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900"
                       />
                     </div>
                     <Input
                       placeholder="Numéro de téléphone"
                       value={parentForm.numeroTuteur1}
                       onChange={(e) => setParentForm({...parentForm, numeroTuteur1: e.target.value})}
+                      className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900"
                     />
                   </CardContent>
                 </Card>
 
-                <Card className="border-dashed">
+                <Card className="border-dashed border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/20">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium">Tuteur 2</CardTitle>
+                    <CardTitle className="text-sm font-medium text-blue-700 dark:text-blue-300">Tuteur 2</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3">
                     <div className="grid grid-cols-2 gap-3">
@@ -1373,17 +1522,20 @@ const PatientPage: React.FC = () => {
                         placeholder="Prénom"
                         value={parentForm.prenomTuteur2}
                         onChange={(e) => setParentForm({...parentForm, prenomTuteur2: e.target.value})}
+                        className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900"
                       />
                       <Input
                         placeholder="Nom"
                         value={parentForm.nomTuteur2}
                         onChange={(e) => setParentForm({...parentForm, nomTuteur2: e.target.value})}
+                        className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900"
                       />
                     </div>
                     <Input
                       placeholder="Numéro de téléphone"
                       value={parentForm.numeroTuteur2}
                       onChange={(e) => setParentForm({...parentForm, numeroTuteur2: e.target.value})}
+                      className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900"
                     />
                   </CardContent>
                 </Card>
@@ -1392,12 +1544,12 @@ const PatientPage: React.FC = () => {
               <TabsContent value="prediction" className="space-y-4 mt-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="niveauInstruction">Niveau d'instruction</Label>
+                    <Label htmlFor="niveauInstruction" className="text-slate-700 dark:text-slate-300 font-semibold">Niveau d'instruction</Label>
                     <Select
                       value={parentForm.niveauInstruction}
                       onValueChange={(value) => setParentForm({...parentForm, niveauInstruction: value})}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900">
                         <SelectValue placeholder="Sélectionner" />
                       </SelectTrigger>
                       <SelectContent>
@@ -1408,7 +1560,7 @@ const PatientPage: React.FC = () => {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="nombre_enfants">Nombre d'enfants</Label>
+                    <Label htmlFor="nombre_enfants" className="text-slate-700 dark:text-slate-300 font-semibold">Nombre d'enfants</Label>
                     <Input
                       id="nombre_enfants"
                       type="number"
@@ -1416,18 +1568,19 @@ const PatientPage: React.FC = () => {
                       value={parentForm.nombre_enfants ?? ''}
                       onChange={(e) => setParentForm({...parentForm, nombre_enfants: e.target.value ? parseInt(e.target.value) : undefined})}
                       placeholder="Ex: 3"
+                      className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900"
                     />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="zoneResidence">Zone de résidence</Label>
+                    <Label htmlFor="zoneResidence" className="text-slate-700 dark:text-slate-300 font-semibold">Zone de résidence</Label>
                     <Select
                       value={parentForm.zoneResidence}
                       onValueChange={(value) => setParentForm({...parentForm, zoneResidence: value})}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900">
                         <SelectValue placeholder="Sélectionner" />
                       </SelectTrigger>
                       <SelectContent>
@@ -1438,12 +1591,12 @@ const PatientPage: React.FC = () => {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="niveauRevenu">Niveau de revenu</Label>
+                    <Label htmlFor="niveauRevenu" className="text-slate-700 dark:text-slate-300 font-semibold">Niveau de revenu</Label>
                     <Select
                       value={parentForm.niveauRevenu}
                       onValueChange={(value) => setParentForm({...parentForm, niveauRevenu: value})}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900">
                         <SelectValue placeholder="Sélectionner" />
                       </SelectTrigger>
                       <SelectContent>
@@ -1457,7 +1610,7 @@ const PatientPage: React.FC = () => {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="distance_centre_sante">Distance centre de santé (km)</Label>
+                    <Label htmlFor="distance_centre_sante" className="text-slate-700 dark:text-slate-300 font-semibold">Distance centre de santé (km)</Label>
                     <Input
                       id="distance_centre_sante"
                       type="number"
@@ -1466,15 +1619,16 @@ const PatientPage: React.FC = () => {
                       value={parentForm.distance_centre_sante ?? ''}
                       onChange={(e) => setParentForm({...parentForm, distance_centre_sante: e.target.value ? parseFloat(e.target.value) : undefined})}
                       placeholder="Ex: 5.5"
+                      className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="acces_transport">Accès au transport</Label>
+                    <Label htmlFor="acces_transport" className="text-slate-700 dark:text-slate-300 font-semibold">Accès au transport</Label>
                     <Select
                       value={parentForm.acces_transport}
                       onValueChange={(value) => setParentForm({...parentForm, acces_transport: value})}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900">
                         <SelectValue placeholder="Sélectionner" />
                       </SelectTrigger>
                       <SelectContent>
@@ -1486,12 +1640,12 @@ const PatientPage: React.FC = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="retard_vaccinal">Retard vaccinal</Label>
+                  <Label htmlFor="retard_vaccinal" className="text-slate-700 dark:text-slate-300 font-semibold">Retard vaccinal</Label>
                   <Select
                     value={parentForm.retard_vaccinal}
                     onValueChange={(value) => setParentForm({...parentForm, retard_vaccinal: value})}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900">
                       <SelectValue placeholder="Sélectionner" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1503,12 +1657,13 @@ const PatientPage: React.FC = () => {
               </TabsContent>
             </Tabs>
 
-            <DialogFooter className="mt-6">
-              <Button type="button" variant="outline" onClick={() => setIsParentModalOpen(false)}>
+            <DialogFooter className="mt-6 gap-2">
+              <Button type="button" variant="outline" className="border-slate-300 dark:border-slate-700" onClick={() => setIsParentModalOpen(false)}>
                 Annuler
               </Button>
               <Button 
                 type="submit" 
+                className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white font-semibold shadow-md"
                 disabled={createParentMutation.isPending || updateUserMutation.isPending}
               >
                 {(createParentMutation.isPending || updateUserMutation.isPending) && (
@@ -1523,63 +1678,70 @@ const PatientPage: React.FC = () => {
 
       {/* Modal Création/Modification Enfant */}
       <Dialog open={isEnfantModalOpen} onOpenChange={setIsEnfantModalOpen}>
-        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Baby className="h-5 w-5 text-pink-500" />
-              {isEditingEnfant ? 'Modifier l\'enfant' : 'Ajouter un enfant'}
-            </DialogTitle>
-            <DialogDescription>
-              {parentForNewEnfant && (
-                <span>
-                  Parent : <strong>{parentForNewEnfant.prenom} {parentForNewEnfant.nom}</strong>
-                </span>
-              )}
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto bg-white dark:bg-slate-900 border-0">
+          <div className="bg-gradient-to-r from-blue-600 to-blue-500 px-6 py-6 -mx-6 -mt-6 rounded-t-lg">
+            <div className="flex items-center gap-3">
+              <div className="bg-white/20 p-2 rounded-lg">
+                <Baby className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-white drop-shadow-lg">
+                  {isEditingEnfant ? 'Modifier l\'enfant' : 'Ajouter un enfant'}
+                </h2>
+                {parentForNewEnfant && (
+                  <p className="text-blue-100 text-sm mt-1">
+                    Parent : <strong>{parentForNewEnfant.prenom} {parentForNewEnfant.nom}</strong>
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
           
-          <form onSubmit={handleSubmitEnfant}>
+          <form onSubmit={handleSubmitEnfant} className="pt-6">
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="enfant-prenom">Prénom *</Label>
+                  <Label htmlFor="enfant-prenom" className="text-slate-700 dark:text-slate-300 font-semibold">Prénom *</Label>
                   <Input
                     id="enfant-prenom"
                     value={enfantForm.prenom}
                     onChange={(e) => setEnfantForm({...enfantForm, prenom: e.target.value})}
                     placeholder="Prénom de l'enfant"
                     required
+                    className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="enfant-nom">Nom *</Label>
+                  <Label htmlFor="enfant-nom" className="text-slate-700 dark:text-slate-300 font-semibold">Nom *</Label>
                   <Input
                     id="enfant-nom"
                     value={enfantForm.nom}
                     onChange={(e) => setEnfantForm({...enfantForm, nom: e.target.value})}
                     placeholder="Nom de l'enfant"
                     required
+                    className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="enfant-dateNaissance">Date de naissance</Label>
+                  <Label htmlFor="enfant-dateNaissance" className="text-slate-700 dark:text-slate-300 font-semibold">Date de naissance</Label>
                   <Input
                     id="enfant-dateNaissance"
                     type="date"
                     value={enfantForm.dateNaissance}
                     onChange={(e) => setEnfantForm({...enfantForm, dateNaissance: e.target.value})}
+                    className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="enfant-sexe">Sexe</Label>
+                  <Label htmlFor="enfant-sexe" className="text-slate-700 dark:text-slate-300 font-semibold">Sexe</Label>
                   <Select 
                     value={enfantForm.sexe} 
                     onValueChange={(value) => setEnfantForm({...enfantForm, sexe: value as SexeEnum})}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900">
                       <SelectValue placeholder="Sélectionner" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1591,18 +1753,19 @@ const PatientPage: React.FC = () => {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="enfant-lieuNaissance">Lieu de naissance</Label>
+                <Label htmlFor="enfant-lieuNaissance" className="text-slate-700 dark:text-slate-300 font-semibold">Lieu de naissance</Label>
                 <Input
                   id="enfant-lieuNaissance"
                   value={enfantForm.lieuNaissance}
                   onChange={(e) => setEnfantForm({...enfantForm, lieuNaissance: e.target.value})}
                   placeholder="Lieu de naissance"
+                  className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900"
                 />
               </div>
 
               <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="enfant-poids">Poids (kg)</Label>
+                  <Label htmlFor="enfant-poids" className="text-slate-700 dark:text-slate-300 font-semibold">Poids (kg)</Label>
                   <Input
                     id="enfant-poids"
                     type="number"
@@ -1610,10 +1773,11 @@ const PatientPage: React.FC = () => {
                     value={enfantForm.poids || ''}
                     onChange={(e) => setEnfantForm({...enfantForm, poids: e.target.value ? parseFloat(e.target.value) : undefined})}
                     placeholder="Poids"
+                    className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="enfant-taille">Taille (cm)</Label>
+                  <Label htmlFor="enfant-taille" className="text-slate-700 dark:text-slate-300 font-semibold">Taille (cm)</Label>
                   <Input
                     id="enfant-taille"
                     type="number"
@@ -1621,15 +1785,16 @@ const PatientPage: React.FC = () => {
                     value={enfantForm.taille || ''}
                     onChange={(e) => setEnfantForm({...enfantForm, taille: e.target.value ? parseFloat(e.target.value) : undefined})}
                     placeholder="Taille"
+                    className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="enfant-groupeSanguin">Groupe sanguin</Label>
+                  <Label htmlFor="enfant-groupeSanguin" className="text-slate-700 dark:text-slate-300 font-semibold">Groupe sanguin</Label>
                   <Select 
                     value={enfantForm.groupeSanguin} 
                     onValueChange={(value) => setEnfantForm({...enfantForm, groupeSanguin: value as GroupeSanguinEnum})}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900">
                       <SelectValue placeholder="Sélectionner" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1642,36 +1807,38 @@ const PatientPage: React.FC = () => {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="enfant-allergies">Allergies</Label>
+                <Label htmlFor="enfant-allergies" className="text-slate-700 dark:text-slate-300 font-semibold">Allergies</Label>
                 <Textarea
                   id="enfant-allergies"
                   value={enfantForm.allergies}
                   onChange={(e) => setEnfantForm({...enfantForm, allergies: e.target.value})}
                   placeholder="Liste des allergies connues"
                   rows={2}
+                  className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="enfant-antecedents">Antécédents médicaux</Label>
+                <Label htmlFor="enfant-antecedents" className="text-slate-700 dark:text-slate-300 font-semibold">Antécédents médicaux</Label>
                 <Textarea
                   id="enfant-antecedents"
                   value={enfantForm.antecedentsMedicaux}
                   onChange={(e) => setEnfantForm({...enfantForm, antecedentsMedicaux: e.target.value})}
                   placeholder="Antécédents médicaux importants"
                   rows={2}
+                  className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900"
                 />
               </div>
             </div>
 
-            <DialogFooter className="mt-6">
-              <Button type="button" variant="outline" onClick={() => setIsEnfantModalOpen(false)}>
+            <DialogFooter className="mt-6 gap-2">
+              <Button type="button" variant="outline" className="border-slate-300 dark:border-slate-700" onClick={() => setIsEnfantModalOpen(false)}>
                 Annuler
               </Button>
               <Button 
                 type="submit" 
+                className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white font-semibold shadow-md"
                 disabled={createEnfantMutation.isPending}
-                className="bg-pink-500 hover:bg-pink-600"
               >
                 {createEnfantMutation.isPending && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />

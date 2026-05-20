@@ -28,9 +28,13 @@ import {
   AlertTriangle,
   XCircle
 } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ModalProvider, useModal } from '@/components/shared/modal-provider';
 import { useNotification } from '@/components/shared/app-notification';
+import { useDecodedToken } from '@/contexts/decoded-token-context';
+import { useUserByEmail } from '@/services/user.service';
+import { useQuery } from '@tanstack/react-query';
+import localityService from '@/services/locality.service';
 
 // Types pour les centres
 interface Centre {
@@ -50,6 +54,32 @@ interface Centre {
   totalVaccinations: number;
   vaccinationsHebdo: number;
 }
+
+const toNum = (v: unknown): number | null => {
+  if (v === null || v === undefined) return null;
+  const parsed = Number(v);
+  return Number.isNaN(parsed) ? null : parsed;
+};
+
+const normalizeRole = (role?: string | null) => (role || '').replace(/^ROLE_/, '').toUpperCase();
+
+const mapBackendCentreToView = (centre: any): Centre => ({
+  id: String(centre.id),
+  nom: centre.name || centre.nom || 'Centre de santé',
+  adresse: centre.quartier || centre.locality?.name || '-',
+  ville: centre.locality?.name || centre.parent?.locality?.name || 'N/A',
+  codePostal: '-',
+  telephone: centre.phone || '-',
+  email: '-',
+  responsable: 'Non renseigné',
+  statut: 'actif',
+  typeService: 'public',
+  capaciteJour: 0,
+  heuresOuverture: '-',
+  specialites: [],
+  totalVaccinations: 0,
+  vaccinationsHebdo: 0,
+});
 
 // Données simulées
 const centresData: Centre[] = [
@@ -241,11 +271,38 @@ const typeServiceConfig = {
 function CentreContent() {
   const { openModal } = useModal();
   const notification = useNotification();
+  const { decodedToken } = useDecodedToken();
   const [searchTerm, setSearchTerm] = useState('');
   const [statutFilter, setStatutFilter] = useState<string>('tous');
   const [typeFilter, setTypeFilter] = useState<string>('tous');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
+  const normalizedRole = normalizeRole(decodedToken?.role);
+  const { data: currentUser } = useUserByEmail(decodedToken?.sub || '');
+  const currentCentreId = toNum((currentUser as any)?.centre?.id);
+  const currentDistrictLocalityId = toNum((currentUser as any)?.centre?.locality?.id);
+
+  const { data: allCentresApi = [] } = useQuery({
+    queryKey: ['medecin-centres-all'],
+    queryFn: () => localityService.getAllCentres(),
+  });
+
+  const { data: icpCentresApi = [] } = useQuery({
+    queryKey: ['medecin-centres-icp', currentDistrictLocalityId],
+    queryFn: () => localityService.getCentresByDistrict(currentDistrictLocalityId!),
+    enabled: normalizedRole === 'ICP' && currentDistrictLocalityId != null,
+  });
+
+  const centresSource = useMemo(() => {
+    const mappedApi = (normalizedRole === 'ICP' ? icpCentresApi : allCentresApi).map(mapBackendCentreToView);
+    if (normalizedRole === 'INFIRMIER') {
+      return mappedApi.filter((c) => toNum(c.id) === currentCentreId);
+    }
+    if (normalizedRole === 'ICP') {
+      return mappedApi;
+    }
+    return mappedApi.length > 0 ? mappedApi : centresData;
+  }, [normalizedRole, allCentresApi, icpCentresApi, currentCentreId]);
 
   // Remettre à la page 1 quand les filtres changent
 //   useEffect(() => {
@@ -253,7 +310,7 @@ function CentreContent() {
 //   }, [searchTerm, statutFilter, typeFilter]);
 
   // Filtrage des centres
-  const filteredCentres = centresData.filter(centre => {
+  const filteredCentres = centresSource.filter(centre => {
     const matchSearch = 
       centre.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
       centre.ville.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -272,10 +329,10 @@ function CentreContent() {
 
   // Statistiques rapides
   const stats = {
-    total: centresData.length,
-    actifs: centresData.filter(c => c.statut === 'actif').length,
-    capaciteTotal: centresData.reduce((sum, c) => sum + c.capaciteJour, 0),
-    vaccinationsTotal: centresData.reduce((sum, c) => sum + c.totalVaccinations, 0)
+    total: centresSource.length,
+    actifs: centresSource.filter(c => c.statut === 'actif').length,
+    capaciteTotal: centresSource.reduce((sum, c) => sum + c.capaciteJour, 0),
+    vaccinationsTotal: centresSource.reduce((sum, c) => sum + c.totalVaccinations, 0)
   };
 
   const handleCreateCentre = () => {
@@ -305,7 +362,13 @@ function CentreContent() {
   return (
     <PageContainer 
       title="Centres de Santé" 
-      subtitle="Gestion des centres de vaccination et de santé"
+      subtitle={
+        normalizedRole === 'ICP'
+          ? 'Vue ICP: votre district et les structures associées'
+          : normalizedRole === 'INFIRMIER'
+            ? 'Vue Infirmier: votre poste/centre uniquement'
+            : 'Gestion des centres de vaccination et de santé'
+      }
     >
       <div className="space-y-6">
         

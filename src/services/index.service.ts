@@ -5,3 +5,6 @@ export * from './appointment.service';
 export * from './vaccination.service';
 export * from './vaccin.service';
 export * from './prediction.service';
+export * from './chatbot.service';
+export * from './chatbot-hybrid.service';
+

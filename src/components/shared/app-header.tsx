@@ -7,7 +7,9 @@ import { useTheme } from "./theme-provider";
 import { ModeToggle } from "./mode-toggle";
 import AppBreadcrumb from "./app-breadcrumb";
 import { UserAvatarHeader } from "./user-avatar";
+import { ChatbotModal } from "@/components/modals";
 import { SexeType, type UserDTO } from "@/types";
+
 
 
 
@@ -42,6 +44,9 @@ export function AppHeader() {
 
                 {/* Section droite */}
                 <div className="flex items-center gap-2 lg:gap-3 flex-shrink-0">
+                {/* Chatbot */}
+                <ChatbotModal />
+
                 {/* Notifications optionnelles */}
                 <Button variant="ghost" size="sm" className="relative h-9 w-9 cursor-pointer">
                     <Bell className="h-4 w-4" />

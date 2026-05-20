@@ -1,12 +1,10 @@
-import { useState, useEffect, useMemo } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { useMemo, useState } from 'react';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Separator } from '@/components/ui/separator';
 import {
   Select,
   SelectContent,
@@ -14,43 +12,29 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { 
   Search, 
   Syringe,
-  Plus,
-  Eye,
-  Trash2,
   AlertCircle,
   RefreshCw,
   Loader2,
   Calendar,
-  User,
-  Baby,
   CheckCircle2,
   Clock,
   XCircle,
-  Phone,
-  Mail,
-  AlertTriangle,
-  Stethoscope,
-  Building2,
-  Thermometer
 } from 'lucide-react';
 import PageContainer from "@/components/shared/page-container";
-import { useModal, ModalProvider } from '@/components/shared/modal-provider';
-import { useAllVaccinations, useDeleteVaccination } from '@/services/vaccination.service';
-import type { VaccinationDTO } from '@/types';
-import { 
-  StatutVaccination, 
-  type StatutVaccinationEnum 
-} from '@/types';
-import { toast } from 'sonner';
+import { VaccinationCarnetModal } from '@/components/modals/vaccination-carnet-modal';
+import { useAllVaccinations } from '@/services/vaccination.service';
+import { useAllEnfants, useUserByEmail } from '@/services/user.service';
+import { useDecodedToken } from '@/contexts/decoded-token-context';
+import type { VaccinationDTO, EnfantDTO } from '@/types';
+import { StatutVaccination, type StatutVaccinationEnum } from '@/types';
 
-// Configuration des statuts avec icônes et couleurs
+// Configuration des statuts
 const statutConfig: Record<StatutVaccinationEnum, { label: string; color: string; bgColor: string; icon: typeof CheckCircle2 }> = {
   EFFECTUER: { 
-    label: 'Effectué', 
+    label: 'Effecté', 
     color: 'text-green-700 dark:text-green-300', 
     bgColor: 'bg-green-100 dark:bg-green-900/50 border-green-200 dark:border-green-800',
     icon: CheckCircle2 
@@ -69,302 +53,172 @@ const statutConfig: Record<StatutVaccinationEnum, { label: string; color: string
   }
 };
 
-// Helper pour obtenir les initiales d'un nom
-const getInitials = (prenom?: string, nom?: string): string => {
-  const p = prenom?.charAt(0)?.toUpperCase() || '';
-  const n = nom?.charAt(0)?.toUpperCase() || '';
-  return p + n || '??';
-};
-
-// Helper pour formater une date
-const formatDate = (dateString?: string): string => {
-  if (!dateString) return '-';
-  try {
-    return new Date(dateString).toLocaleDateString('fr-FR', {
-      day: '2-digit',
-      month: 'long',
-      year: 'numeric'
-    });
-  } catch {
-    return dateString;
-  }
-};
-
-// Helper pour formater une date courte
-const formatDateShort = (dateString?: string): string => {
-  if (!dateString) return '-';
-  try {
-    return new Date(dateString).toLocaleDateString('fr-FR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    });
-  } catch {
-    return dateString;
-  }
-};
-
-function VaccinationContent() {
-  const { openModal } = useModal();
+export default function Vaccination() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statutFilter, setStatutFilter] = useState<string>('tous');
-  const [vaccinFilter, setVaccinFilter] = useState<string>('tous');
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 6; // 6 cards par page pour un meilleur affichage
+  const [selectedChildForCarnet, setSelectedChildForCarnet] = useState<EnfantDTO | null>(null);
+  const [carnetModalOpen, setCarnetModalOpen] = useState(false);
+  const { decodedToken } = useDecodedToken();
+  const { data: currentUser } = useUserByEmail(decodedToken?.sub || '');
+  const normalizedRole = (decodedToken?.role || '').replace(/^ROLE_/, '').toUpperCase();
+  const isInfirmier = normalizedRole === 'INFIRMIER';
+  const currentUserEmail = (decodedToken?.sub || currentUser?.email || '').toLowerCase();
 
-  // Récupération des vraies données du backend
-  const { data: vaccinations, isLoading, isError, error, refetch } = useAllVaccinations();
-  const deleteVaccination = useDeleteVaccination();
-
-  // DEBUG: Afficher les données reçues
-  console.log('[Vaccination Page] isLoading:', isLoading);
-  console.log('[Vaccination Page] isError:', isError);
-  console.log('[Vaccination Page] vaccinations:', vaccinations);
-  console.log('[Vaccination Page] vaccinations length:', vaccinations?.length);
-
-  // Remettre à la page 1 quand les filtres changent
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, statutFilter, vaccinFilter]);
-
-  // Liste des vaccinations (tableau vide si pas de données)
-  const vaccinationsList = vaccinations || [];
-
-  // Filtrage des vaccinations avec les vraies données du backend
-  const filteredVaccinations = useMemo(() => {
-    return vaccinationsList.filter(vaccination => {
-      // Recherche sur plusieurs champs
-      const enfantNom = vaccination.appointment?.enfant?.nom?.toLowerCase() || vaccination.enfant?.nom?.toLowerCase() || '';
-      const enfantPrenom = vaccination.appointment?.enfant?.prenom?.toLowerCase() || vaccination.enfant?.prenom?.toLowerCase() || '';
-      const vaccinNom = vaccination.vaccine?.nom?.toLowerCase() || '';
-      const infirmierNom = vaccination.utilisateur?.nom?.toLowerCase() || '';
-      const infirmierPrenom = vaccination.utilisateur?.prenom?.toLowerCase() || '';
-      const search = searchTerm.toLowerCase();
-      
-      const matchSearch = 
-        enfantNom.includes(search) ||
-        enfantPrenom.includes(search) ||
-        vaccinNom.includes(search) ||
-        infirmierNom.includes(search) ||
-        infirmierPrenom.includes(search);
-      
-      const matchStatut = statutFilter === 'tous' || vaccination.statutVaccination === statutFilter;
-      const matchVaccin = vaccinFilter === 'tous' || vaccinNom.includes(vaccinFilter.toLowerCase());
-      
-      return matchSearch && matchStatut && matchVaccin;
-    });
-  }, [vaccinationsList, searchTerm, statutFilter, vaccinFilter]);
-
-  // Pagination
-  const totalPages = Math.ceil(filteredVaccinations.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedVaccinations = filteredVaccinations.slice(startIndex, startIndex + itemsPerPage);
-
-  // Statistiques rapides basées sur les vraies données
-  const stats = useMemo(() => ({
-    total: vaccinationsList.length,
-    effectuer: vaccinationsList.filter(v => v.statutVaccination === StatutVaccination.EFFECTUER).length,
-    en_attente: vaccinationsList.filter(v => v.statutVaccination === StatutVaccination.EN_ATTENTE).length,
-    non_effectuer: vaccinationsList.filter(v => v.statutVaccination === StatutVaccination.NON_EFFECTUER).length
-  }), [vaccinationsList]);
-
-  // Liste des vaccins uniques pour le filtre
-  const uniqueVaccins = useMemo(() => {
-    const vaccins = new Set<string>();
-    vaccinationsList.forEach(v => {
-      if (v.vaccine?.nom) vaccins.add(v.vaccine.nom);
-    });
-    return Array.from(vaccins);
-  }, [vaccinationsList]);
-
-  const handleCreateVaccination = () => {
-    openModal('create-vaccination', {});
-    toast.info("Ouverture du formulaire de création de vaccination");
-  };
-
-  const handleViewDetails = (vaccination: VaccinationDTO) => {
-    openModal('detail-vaccination', vaccination);
-  };
-
-  const handleDeleteVaccination = async (vaccination: VaccinationDTO) => {
-    if (!vaccination.id) return;
-    
+  // API Hooks
+  const { data: vaccinations = [], isLoading, isError, refetch } = useAllVaccinations();
+  const { data: enfants = [] } = useAllEnfants();
+  const ownedIds = useMemo(() => {
     try {
-      await deleteVaccination.mutateAsync(vaccination.id);
-      toast.success("Vaccination supprimée avec succès");
-    } catch (error) {
-      toast.error("Erreur lors de la suppression");
+      const raw = decodedToken?.sub
+        ? localStorage.getItem(`infirmier-owned-records:${decodedToken.sub.toLowerCase()}`)
+        : null;
+      if (!raw) return { vaccinationIds: [] as number[] };
+      const parsed = JSON.parse(raw) as { vaccinationIds?: number[] };
+      return { vaccinationIds: Array.isArray(parsed.vaccinationIds) ? parsed.vaccinationIds : [] };
+    } catch {
+      return { vaccinationIds: [] as number[] };
     }
+  }, [decodedToken?.sub, vaccinations]);
+  const scopedVaccinations = useMemo(() => {
+    if (!isInfirmier) return vaccinations;
+    return vaccinations.filter((vacc) => {
+      const vaccId = vacc.id != null ? Number(vacc.id) : null;
+      const ownerId = vacc.utilisateur?.id != null ? Number(vacc.utilisateur.id) : null;
+      const ownerEmail = (vacc.utilisateur?.email || '').toLowerCase();
+      return (
+        (ownerId != null && ownerId === (currentUser?.id ?? -1)) ||
+        (!!ownerEmail && ownerEmail === currentUserEmail) ||
+        (vaccId != null && ownedIds.vaccinationIds.includes(vaccId))
+      );
+    });
+  }, [vaccinations, isInfirmier, currentUser?.id, currentUserEmail, ownedIds.vaccinationIds]);
+
+  // Group vaccinations by child
+  const vaccinationsByChild = enfants.reduce((acc, child) => {
+    const childVaccinations = scopedVaccinations.filter(vacc => {
+      const enfantId = vacc.appointment?.enfant?.id || vacc.enfant?.id;
+      return enfantId === child.id;
+    });
+    if (childVaccinations.length > 0) {
+      acc.push({ child, vaccinations: childVaccinations });
+    }
+    return acc;
+  }, [] as Array<{ child: EnfantDTO; vaccinations: VaccinationDTO[] }>);
+
+  // Filter
+  const filteredChildren = vaccinationsByChild.filter(({ child, vaccinations: childVaccinations }) => {
+    const matchSearch = searchTerm === '' || 
+      child.prenom?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      child.nom?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchStatut = statutFilter === 'tous' || 
+      childVaccinations.some(vacc => vacc.statutVaccination === statutFilter);
+    return matchSearch && matchStatut;
+  });
+
+  // Stats
+  const stats = {
+    total: scopedVaccinations.length,
+    effectue: scopedVaccinations.filter(r => r.statutVaccination === StatutVaccination.EFFECTUER).length,
+    enAttente: scopedVaccinations.filter(r => r.statutVaccination === StatutVaccination.EN_ATTENTE).length,
+    nonEffectue: scopedVaccinations.filter(r => r.statutVaccination === StatutVaccination.NON_EFFECTUER).length,
   };
 
-  // État de chargement
+  // Loading state
   if (isLoading) {
     return (
-      <PageContainer 
-        title="Gestion des Vaccinations" 
-        subtitle="Suivi et administration des vaccins"
-      >
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {[...Array(4)].map((_, i) => (
-              <Card key={i}>
-                <CardContent className="p-6">
-                  <div className="flex items-center space-x-3">
-                    <Skeleton className="h-10 w-10 rounded-lg" />
-                    <div className="space-y-2">
-                      <Skeleton className="h-4 w-20" />
-                      <Skeleton className="h-6 w-12" />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[...Array(6)].map((_, i) => (
-              <Card key={i}>
-                <CardContent className="p-6">
-                  <div className="space-y-4">
-                    <Skeleton className="h-6 w-3/4" />
-                    <Skeleton className="h-20 w-full" />
-                    <Skeleton className="h-16 w-full" />
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
+      <PageContainer title="Vaccinations" subtitle="Carnet de vaccination des enfants">
+        <Card>
+          <CardContent className="py-12 text-center">
+            <Loader2 className="h-16 w-16 text-muted-foreground mx-auto mb-4 animate-spin" />
+            <h3 className="text-lg font-semibold mb-2">Chargement les vaccinations...</h3>
+            <p className="text-muted-foreground">Veuillez patienter</p>
+          </CardContent>
+        </Card>
       </PageContainer>
     );
   }
 
-  // État d'erreur
+  // Error state
   if (isError) {
     return (
-      <PageContainer 
-        title="Gestion des Vaccinations" 
-        subtitle="Suivi et administration des vaccins"
-      >
+      <PageContainer title="Vaccinations" subtitle="Carnet de vaccination des enfants">
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
-            Erreur lors du chargement des vaccinations: {(error as Error)?.message || 'Erreur inconnue'}
+            Erreur lors du chargement des vaccinations.
+            <Button variant="link" onClick={() => refetch()}>Réessayer</Button>
           </AlertDescription>
         </Alert>
-        <Button onClick={() => refetch()} className="mt-4">
-          <RefreshCw className="h-4 w-4 mr-2" />
-          Réessayer
-        </Button>
       </PageContainer>
     );
   }
 
   return (
-    <PageContainer 
-      title="Gestion des Vaccinations" 
-      subtitle="Suivi et administration des vaccins"
-    >
-      <div className="space-y-6">
-        
-        {/* Statistiques rapides */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card className="hover:shadow-md transition-shadow">
-            <CardContent className="p-6">
-              <div className="flex items-center space-x-3">
-                <div className="p-3 bg-blue-100 dark:bg-blue-900/50 rounded-xl">
-                  <Syringe className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Total</p>
-                  <p className="text-2xl font-bold">{stats.total}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="hover:shadow-md transition-shadow">
-            <CardContent className="p-6">
-              <div className="flex items-center space-x-3">
-                <div className="p-3 bg-green-100 dark:bg-green-900/50 rounded-xl">
-                  <CheckCircle2 className="h-6 w-6 text-green-600 dark:text-green-400" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Effectués</p>
-                  <p className="text-2xl font-bold text-green-600">{stats.effectuer}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="hover:shadow-md transition-shadow">
-            <CardContent className="p-6">
-              <div className="flex items-center space-x-3">
-                <div className="p-3 bg-orange-100 dark:bg-orange-900/50 rounded-xl">
-                  <Clock className="h-6 w-6 text-orange-600 dark:text-orange-400" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">En attente</p>
-                  <p className="text-2xl font-bold text-orange-600">{stats.en_attente}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="hover:shadow-md transition-shadow">
-            <CardContent className="p-6">
-              <div className="flex items-center space-x-3">
-                <div className="p-3 bg-red-100 dark:bg-red-900/50 rounded-xl">
-                  <XCircle className="h-6 w-6 text-red-600 dark:text-red-400" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Non effectués</p>
-                  <p className="text-2xl font-bold text-red-600">{stats.non_effectuer}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Filtres et actions */}
-        <Card>
-          <CardHeader className="pb-4">
-            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
+    <PageContainer title="Vaccinations" subtitle="Carnet de vaccination des enfants">
+      {/* Stats Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border-blue-200">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="flex items-center space-x-2">
-                  <Syringe className="h-5 w-5" />
-                  <span>Liste des Vaccinations</span>
-                </CardTitle>
-                <CardDescription>
-                  Gérez et suivez toutes les vaccinations des patients
-                </CardDescription>
+                <p className="text-sm text-blue-600">Total</p>
+                <p className="text-2xl font-bold text-blue-700">{stats.total}</p>
               </div>
-              <div className="flex gap-2">
-                <Button variant="outline" size="icon" onClick={() => refetch()} title="Rafraîchir">
-                  <RefreshCw className="h-4 w-4" />
-                </Button>
-                <Button onClick={handleCreateVaccination} className="flex items-center space-x-2">
-                  <Plus className="h-4 w-4" />
-                  <span>Nouvelle Vaccination</span>
-                </Button>
-              </div>
+              <Syringe className="h-8 w-8 text-blue-500" />
             </div>
-
-            {/* Filtres */}
-            <div className="flex flex-col lg:flex-row gap-4 pt-4">
-              <div className="flex-1">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Rechercher par patient, vaccin ou infirmier..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10"
-                  />
-                </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 border-green-200">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-green-600">Effectués</p>
+                <p className="text-2xl font-bold text-green-700">{stats.effectue}</p>
               </div>
-              
+              <CheckCircle2 className="h-8 w-8 text-green-500" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 border-orange-200">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-orange-600">En attente</p>
+                <p className="text-2xl font-bold text-orange-700">{stats.enAttente}</p>
+              </div>
+              <Clock className="h-8 w-8 text-orange-500" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/20 dark:to-red-800/20 border-red-200">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-red-600">Non effectués</p>
+                <p className="text-2xl font-bold text-red-700">{stats.nonEffectue}</p>
+              </div>
+              <XCircle className="h-8 w-8 text-red-500" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Toolbar */}
+      <Card className="mb-6">
+        <CardContent className="p-4">
+          <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
+            <div className="flex flex-1 gap-4 w-full lg:w-auto">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Rechercher un enfant..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
               <Select value={statutFilter} onValueChange={setStatutFilter}>
-                <SelectTrigger className="w-full lg:w-48">
+                <SelectTrigger className="w-48">
                   <SelectValue placeholder="Statut" />
                 </SelectTrigger>
                 <SelectContent>
@@ -374,304 +228,138 @@ function VaccinationContent() {
                   <SelectItem value={StatutVaccination.NON_EFFECTUER}>Non effectué</SelectItem>
                 </SelectContent>
               </Select>
-
-              <Select value={vaccinFilter} onValueChange={setVaccinFilter}>
-                <SelectTrigger className="w-full lg:w-48">
-                  <SelectValue placeholder="Type de vaccin" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="tous">Tous les vaccins</SelectItem>
-                  {uniqueVaccins.map((vaccin) => (
-                    <SelectItem key={vaccin} value={vaccin}>{vaccin}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </div>
-          </CardHeader>
+            
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => refetch()}>
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Content - Carnets par enfant */}
+      {filteredChildren.length === 0 ? (
+        <Card>
+          <CardContent className="py-12 text-center">
+            <Syringe className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+            <h3 className="text-lg font-semibold mb-2">Aucune vaccination</h3>
+            <p className="text-muted-foreground mb-4">
+              {searchTerm || statutFilter !== 'tous' 
+                ? 'Aucune vaccination ne correspond à vos critères.'
+                : isInfirmier
+                  ? 'Aucune vaccination créée par votre compte pour le moment.'
+                  : 'Aucune vaccination pour le moment.'}
+            </p>
+          </CardContent>
         </Card>
-
-        {/* Liste des vaccinations en cards */}
-        {paginatedVaccinations.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {paginatedVaccinations.map((vaccination) => {
-              const statut = vaccination.statutVaccination || StatutVaccination.EN_ATTENTE;
-              const statutInfo = statutConfig[statut] || statutConfig[StatutVaccination.EN_ATTENTE];
-              const StatusIcon = statutInfo.icon;
-              
-              // Récupérer les infos de l'enfant (depuis appointment ou enfant direct)
-              const enfant = vaccination.appointment?.enfant || vaccination.enfant;
-              const parent = vaccination.appointment?.enfant?.parent || vaccination.appointment?.utilisateur;
-              
-              return (
-                <Card 
-                  key={vaccination.id} 
-                  className={`hover:shadow-lg transition-all duration-300 border-l-4 ${
-                    statut === 'EFFECTUER' ? 'border-l-green-500' : 
-                    statut === 'EN_ATTENTE' ? 'border-l-orange-500' : 'border-l-red-500'
-                  }`}
-                >
-                  <CardHeader className="pb-3">
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-12 w-12 border-2 border-primary/20">
-                          <AvatarFallback className="bg-primary/10 text-primary font-semibold">
-                            {getInitials(enfant?.prenom, enfant?.nom)}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <CardTitle className="text-base">
-                            {enfant?.prenom || '-'} {enfant?.nom || '-'}
-                          </CardTitle>
-                          <CardDescription className="flex items-center gap-1 text-xs">
-                            <Baby className="h-3 w-3" />
-                            {enfant?.dateNaissance ? formatDateShort(enfant.dateNaissance) : 'Date non renseignée'}
-                            {enfant?.sexe && (
-                              <Badge variant="outline" className="ml-1 text-xs px-1 py-0">
-                                {enfant.sexe === 'MASCULIN' ? '♂' : '♀'}
-                              </Badge>
-                            )}
-                          </CardDescription>
-                        </div>
-                      </div>
-                      <Badge className={`${statutInfo.bgColor} ${statutInfo.color} border`}>
-                        <StatusIcon className="h-3 w-3 mr-1" />
-                        {statutInfo.label}
-                      </Badge>
-                    </div>
-                  </CardHeader>
-
-                  <CardContent className="space-y-4">
-                    {/* Informations Vaccin */}
-                    <div className="bg-blue-50 dark:bg-blue-950/30 rounded-lg p-3 space-y-2">
-                      <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300 font-medium">
-                        <Syringe className="h-4 w-4" />
-                        <span className="text-sm">Vaccin administré</span>
-                      </div>
-                      <div className="pl-6 space-y-1">
-                        <p className="font-semibold text-sm">{vaccination.vaccine?.nom || 'Non spécifié'}</p>
-                        {vaccination.vaccine?.fabricant && (
-                          <p className="text-xs text-muted-foreground flex items-center gap-1">
-                            <Building2 className="h-3 w-3" />
-                            {vaccination.vaccine.fabricant}
-                          </p>
-                        )}
-                        {vaccination.vaccine?.numeroLot && (
-                          <p className="text-xs text-muted-foreground">
-                            Lot: {vaccination.vaccine.numeroLot}
-                          </p>
-                        )}
-                        <div className="flex flex-wrap gap-2 mt-1">
-                          {vaccination.vaccine?.typeVaccin && (
-                            <Badge variant="secondary" className="text-xs">
-                              {vaccination.vaccine.typeVaccin}
-                            </Badge>
-                          )}
-                          {vaccination.vaccine?.modeAdministration && (
-                            <Badge variant="outline" className="text-xs">
-                              {vaccination.vaccine.modeAdministration}
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Date de vaccination */}
-                    <div className="flex items-center gap-2 text-sm">
-                      <Calendar className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-muted-foreground">Date:</span>
-                      <span className="font-medium">{formatDate(vaccination.date)}</span>
-                    </div>
-
-                    {/* Infirmier/Agent de santé */}
-                    {vaccination.utilisateur && (
-                      <div className="bg-purple-50 dark:bg-purple-950/30 rounded-lg p-3 space-y-2">
-                        <div className="flex items-center gap-2 text-purple-700 dark:text-purple-300 font-medium">
-                          <Stethoscope className="h-4 w-4" />
-                          <span className="text-sm">Agent de santé</span>
-                        </div>
-                        <div className="pl-6 space-y-1">
-                          <p className="font-semibold text-sm">
-                            {vaccination.utilisateur.prenom} {vaccination.utilisateur.nom}
-                          </p>
-                          {vaccination.utilisateur.email && (
-                            <p className="text-xs text-muted-foreground flex items-center gap-1">
-                              <Mail className="h-3 w-3" />
-                              {vaccination.utilisateur.email}
-                            </p>
-                          )}
-                          {vaccination.utilisateur.telephone && (
-                            <p className="text-xs text-muted-foreground flex items-center gap-1">
-                              <Phone className="h-3 w-3" />
-                              {vaccination.utilisateur.telephone}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Informations Parent */}
-                    {parent && (
-                      <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 space-y-2">
-                        <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300 font-medium">
-                          <User className="h-4 w-4" />
-                          <span className="text-sm">Parent/Tuteur</span>
-                        </div>
-                        <div className="pl-6 space-y-1">
-                          <p className="font-semibold text-sm">
-                            {parent.prenom} {parent.nom}
-                          </p>
-                          {parent.telephone && (
-                            <p className="text-xs text-muted-foreground flex items-center gap-1">
-                              <Phone className="h-3 w-3" />
-                              {parent.telephone}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Infos supplémentaires de l'enfant */}
-                    {(enfant?.allergies || enfant?.groupeSanguin || enfant?.poids) && (
-                      <div className="flex flex-wrap gap-2">
-                        {enfant?.groupeSanguin && (
-                          <Badge variant="outline" className="text-xs">
-                            🩸 {enfant.groupeSanguin}
-                          </Badge>
-                        )}
-                        {enfant?.poids && (
-                          <Badge variant="outline" className="text-xs">
-                            ⚖️ {enfant.poids} kg
-                          </Badge>
-                        )}
-                        {enfant?.allergies && (
-                          <Badge variant="destructive" className="text-xs">
-                            <AlertTriangle className="h-3 w-3 mr-1" />
-                            {enfant.allergies}
-                          </Badge>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Conservation vaccin */}
-                    {vaccination.vaccine?.temperatureConservation && (
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <Thermometer className="h-3 w-3" />
-                        Conservation: {vaccination.vaccine.temperatureConservation}
-                      </div>
-                    )}
-                  </CardContent>
-
-                  <Separator />
-
-                  <CardFooter className="pt-4 flex justify-between">
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => handleViewDetails(vaccination)}
-                    >
-                      <Eye className="h-4 w-4 mr-1" />
-                      Détails
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="sm"
-                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                      onClick={() => handleDeleteVaccination(vaccination)}
-                      disabled={deleteVaccination.isPending}
-                    >
-                      {deleteVaccination.isPending ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <>
-                          <Trash2 className="h-4 w-4 mr-1" />
-                          Supprimer
-                        </>
-                      )}
-                    </Button>
-                  </CardFooter>
-                </Card>
-              );
-            })}
-          </div>
-        ) : (
-          <Card>
-            <CardContent className="py-12">
-              <div className="text-center">
-                <Syringe className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-lg font-semibold">Aucune vaccination trouvée</h3>
-                <p className="text-muted-foreground">
-                  {searchTerm || statutFilter !== 'tous' || vaccinFilter !== 'tous' 
-                    ? "Aucune vaccination ne correspond à vos critères de recherche."
-                    : "Aucune vaccination enregistrée pour le moment."
-                  }
-                </p>
-                <Button onClick={handleCreateVaccination} className="mt-4">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Ajouter une vaccination
-                </Button>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredChildren.map(({ child, vaccinations: childVaccinations }) => (
+            <Card key={child.id} className="overflow-hidden hover:shadow-xl transition-all duration-300 border-0 bg-white dark:bg-slate-900">
+              {/* Header avec gradient bleu */}
+              <div className="bg-gradient-to-r from-blue-600 to-blue-500 px-6 py-4 relative">
+                <div className="flex items-center gap-4">
+                  <Avatar className="h-14 w-14 border-3 border-white shadow-lg">
+                    <AvatarFallback className="bg-white text-blue-600 font-bold text-lg">
+                      {child.prenom?.[0]}{child.nom?.[0]}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 text-white">
+                    <p className="font-bold text-lg leading-none">{child.prenom} {child.nom}</p>
+                    <p className="text-sm text-blue-100 mt-1">
+                      {childVaccinations.length} vaccination{childVaccinations.length > 1 ? 's' : ''}
+                    </p>
+                  </div>
+                </div>
               </div>
-            </CardContent>
-          </Card>
-        )}
+              
+              <CardContent className="p-6 space-y-5">
+                {/* Stats Bar */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="bg-gradient-to-br from-green-50 to-green-100/50 dark:from-green-950/30 dark:to-green-900/30 rounded-lg p-4 border border-green-100 dark:border-green-800">
+                    <p className="text-2xl font-bold text-green-600">
+                      {childVaccinations.filter(r => r.statutVaccination === StatutVaccination.EFFECTUER).length}
+                    </p>
+                    <p className="text-xs font-semibold text-green-700 uppercase tracking-wide mt-1">Effectuées</p>
+                  </div>
+                  <div className="bg-gradient-to-br from-orange-50 to-orange-100/50 dark:from-orange-950/30 dark:to-orange-900/30 rounded-lg p-4 border border-orange-100 dark:border-orange-800">
+                    <p className="text-2xl font-bold text-orange-600">
+                      {childVaccinations.filter(r => r.statutVaccination === StatutVaccination.EN_ATTENTE).length}
+                    </p>
+                    <p className="text-xs font-semibold text-orange-700 uppercase tracking-wide mt-1">En attente</p>
+                  </div>
+                  <div className="bg-gradient-to-br from-red-50 to-red-100/50 dark:from-red-950/30 dark:to-red-900/30 rounded-lg p-4 border border-red-100 dark:border-red-800">
+                    <p className="text-2xl font-bold text-red-600">
+                      {childVaccinations.filter(r => r.statutVaccination === StatutVaccination.NON_EFFECTUER).length}
+                    </p>
+                    <p className="text-xs font-semibold text-red-700 uppercase tracking-wide mt-1">Non effectuées</p>
+                  </div>
+                </div>
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex justify-center">
-            <Pagination>
-              <PaginationContent>
-                <PaginationItem>
-                  <PaginationPrevious 
-                    href="#" 
-                    onClick={(e) => {
-                      e.preventDefault();
-                      if (currentPage > 1) setCurrentPage(currentPage - 1);
-                    }}
-                  />
-                </PaginationItem>
-                {[...Array(totalPages)].map((_, i) => (
-                  <PaginationItem key={i}>
-                    <PaginationLink 
-                      href="#" 
-                      isActive={currentPage === i + 1}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        setCurrentPage(i + 1);
-                      }}
-                    >
-                      {i + 1}
-                    </PaginationLink>
-                  </PaginationItem>
-                ))}
-                <PaginationItem>
-                  <PaginationNext 
-                    href="#" 
-                    onClick={(e) => {
-                      e.preventDefault();
-                      if (currentPage < totalPages) setCurrentPage(currentPage + 1);
-                    }}
-                  />
-                </PaginationItem>
-              </PaginationContent>
-            </Pagination>
-          </div>
-        )}
+                {/* Separator */}
+                <div className="h-px bg-gradient-to-r from-transparent via-blue-200 to-transparent"></div>
 
-        {/* Info pagination */}
-        {filteredVaccinations.length > 0 && (
-          <div className="text-center text-sm text-muted-foreground">
-            Affichage de {startIndex + 1} à {Math.min(startIndex + itemsPerPage, filteredVaccinations.length)} sur {filteredVaccinations.length} vaccinations
-          </div>
-        )}
-      </div>
+                {/* Preview vaccinations */}
+                {childVaccinations.length > 0 ? (
+                  <div className="space-y-3">
+                    <p className="text-xs font-bold text-blue-700 uppercase tracking-widest">Dernières vaccinations</p>
+                    <div className="space-y-2">
+                      {childVaccinations.slice(0, 2).map((vacc) => (
+                        <div key={vacc.id} className="flex items-start justify-between gap-3 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-100 dark:border-blue-800">
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-gray-900 dark:text-white text-sm">{vacc.vaccine?.nom}</p>
+                            <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                              {vacc.date && new Date(vacc.date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                            </p>
+                          </div>
+                          <Badge className={`${statutConfig[vacc.statutVaccination as StatutVaccinationEnum].bgColor} ${statutConfig[vacc.statutVaccination as StatutVaccinationEnum].color} border text-xs`}>
+                            {statutConfig[vacc.statutVaccination as StatutVaccinationEnum].label}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                    {childVaccinations.length > 2 && (
+                      <p className="text-xs text-blue-600 dark:text-blue-400 font-medium pt-1">
+                        +{childVaccinations.length - 2} autres
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-center py-4">
+                    <p className="text-sm text-muted-foreground">Aucune vaccination pour le moment</p>
+                  </div>
+                )}
+
+                {/* Button */}
+                <Button 
+                  className="w-full mt-3 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white font-semibold shadow-md hover:shadow-lg transition-all"
+                  onClick={() => {
+                    setSelectedChildForCarnet(child);
+                    setCarnetModalOpen(true);
+                  }}
+                >
+                  <Calendar className="h-4 w-4 mr-2" />
+                  Voir les vaccinations
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Carnet Modal */}
+      {selectedChildForCarnet && (
+        <VaccinationCarnetModal
+          enfant={selectedChildForCarnet}
+          isOpen={carnetModalOpen}
+          onClose={() => {
+            setCarnetModalOpen(false);
+            setSelectedChildForCarnet(null);
+          }}
+        />
+      )}
     </PageContainer>
-  );
-}
-
-// Export par défaut du composant principal
-export default function Vaccination() {
-  return (
-    <ModalProvider>
-      <VaccinationContent />
-    </ModalProvider>
   );
 }

@@ -1,12 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -39,6 +38,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { 
   Search, 
@@ -47,21 +52,19 @@ import {
   Syringe,
   MoreHorizontal,
   Eye,
+  Edit,
   Pencil,
   Trash2,
   AlertCircle,
   RefreshCw,
   Loader2,
-  Calendar,
-  Factory,
-  Thermometer,
   Clock,
   Package,
   AlertTriangle,
+  Thermometer,
   XCircle,
   LayoutGrid,
   List,
-  FileText,
   Activity,
   Info
 } from 'lucide-react';
@@ -91,184 +94,97 @@ interface VaccinCardProps {
 }
 
 function VaccinCard({ vaccin, onView, onEdit, onDelete }: VaccinCardProps) {
-  const isExpired = vaccin.dateExpiration ? isBefore(parseISO(vaccin.dateExpiration), new Date()) : false;
-  const isExpiringSoon = vaccin.dateExpiration ? 
-    isBefore(parseISO(vaccin.dateExpiration), addMonths(new Date(), 3)) && !isExpired : false;
-  
-  const getStatusColor = () => {
-    if (isExpired) return 'bg-red-500';
-    if (isExpiringSoon) return 'bg-amber-500';
-    return 'bg-emerald-500';
-  };
-
-  const getTypeColor = (type: TypeVaccinEnum) => {
-    const colors: Record<string, string> = {
-      BCG: 'bg-purple-100 text-purple-700 border-purple-200',
-      POLIO: 'bg-blue-100 text-blue-700 border-blue-200',
-      DTC: 'bg-green-100 text-green-700 border-green-200',
-      HEPATITE_B: 'bg-orange-100 text-orange-700 border-orange-200',
-      COVID_19: 'bg-red-100 text-red-700 border-red-200',
-      GRIPPE: 'bg-cyan-100 text-cyan-700 border-cyan-200',
-      AUTRES: 'bg-gray-100 text-gray-700 border-gray-200',
-    };
-    return colors[type] || colors.AUTRES;
-  };
-  
   return (
-    <Card className="group hover:shadow-lg transition-all duration-300 overflow-hidden">
-      {/* Status bar */}
-      <div className={`h-1.5 ${getStatusColor()}`} />
-      
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-3">
-            <div className={`p-3 rounded-xl ${isExpired ? 'bg-red-50' : 'bg-primary/10'}`}>
-              <Syringe className={`h-6 w-6 ${isExpired ? 'text-red-500' : 'text-primary'}`} />
+    <Card className="overflow-hidden hover:shadow-lg transition-all duration-300 border-0 bg-white dark:bg-slate-900">
+      {/* Header bleu */}
+      <div className="bg-gradient-to-r from-blue-600 to-blue-500 px-5 py-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <div className="bg-white/20 p-2 rounded-lg flex-shrink-0">
+              <Syringe className="h-4 w-4 text-white" />
             </div>
-            <div className="flex-1 min-w-0">
-              <CardTitle className="text-lg truncate">{vaccin.nom}</CardTitle>
-              <CardDescription className="flex items-center gap-1 mt-1">
-                <Factory className="h-3 w-3" />
-                {vaccin.fabricant || 'Fabricant non spécifié'}
-              </CardDescription>
+            <div className="flex-1 min-w-0 text-white">
+              <p className="font-bold text-sm leading-tight truncate">{vaccin.nom}</p>
+              <p className="text-xs text-white/90 truncate">{vaccin.fabricant || 'Fabricant non spécifié'}</p>
             </div>
           </div>
           
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 transition-opacity">
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => onView(vaccin)}>
-                <Eye className="mr-2 h-4 w-4" /> Voir détails
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onEdit(vaccin)}>
-                <Pencil className="mr-2 h-4 w-4" /> Modifier
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => onDelete(vaccin)} className="text-destructive">
-                <Trash2 className="mr-2 h-4 w-4" /> Supprimer
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <div className="flex items-center gap-0.5 flex-shrink-0">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" className="text-white hover:bg-white/20 h-6 w-6" onClick={() => onView(vaccin)}>
+                    <Eye className="h-3 w-3" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Voir détails</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" className="text-white hover:bg-white/20 h-6 w-6" onClick={() => onEdit(vaccin)}>
+                    <Edit className="h-3 w-3" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Modifier</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" className="text-white hover:bg-white/20 h-6 w-6" onClick={() => onDelete(vaccin)}>
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Supprimer</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
         </div>
-      </CardHeader>
+      </div>
 
-      <CardContent className="space-y-4">
-        {/* Type et Période */}
-        <div className="flex flex-wrap gap-2">
-          <Badge variant="outline" className={getTypeColor(vaccin.typeVaccin)}>
-            {TypeVaccinLabels[vaccin.typeVaccin] || vaccin.typeVaccin}
-          </Badge>
+      <CardContent className="p-3">
+        <div className="flex flex-wrap items-start gap-2">
+          {/* Type */}
+          <div className="flex items-center gap-1.5 px-2 py-1.5 bg-blue-50 dark:bg-blue-950/20 rounded-md border border-blue-200 dark:border-blue-800">
+            <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">Type:</span>
+            <span className="text-xs text-blue-900 dark:text-blue-100">{TypeVaccinLabels[vaccin.typeVaccin] || vaccin.typeVaccin}</span>
+          </div>
+
+          {/* Période */}
           {vaccin.periode && (
-            <Badge variant="secondary">
-              <Clock className="h-3 w-3 mr-1" />
-              {PeriodeVaccinationLabels[vaccin.periode] || vaccin.periode}
-            </Badge>
+            <div className="flex items-center gap-1.5 px-2 py-1.5 bg-blue-50 dark:bg-blue-950/20 rounded-md border border-blue-200 dark:border-blue-800">
+              <Clock className="h-3 w-3 text-blue-600 dark:text-blue-400" />
+              <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">Période:</span>
+              <span className="text-xs text-blue-900 dark:text-blue-100">{PeriodeVaccinationLabels[vaccin.periode] || vaccin.periode}</span>
+            </div>
           )}
-        </div>
 
-        {/* Informations principales */}
-        <div className="grid grid-cols-2 gap-3">
+          {/* N° Lot */}
           {vaccin.numeroLot && (
-            <div className="flex items-center gap-2 p-2 bg-muted/50 rounded-lg">
-              <Package className="h-4 w-4 text-muted-foreground" />
-              <div className="min-w-0">
-                <p className="text-xs text-muted-foreground">N° Lot</p>
-                <p className="text-sm font-medium truncate">{vaccin.numeroLot}</p>
-              </div>
+            <div className="flex items-center gap-1.5 px-2 py-1.5 bg-blue-50 dark:bg-blue-950/20 rounded-md border border-blue-200 dark:border-blue-800">
+              <Package className="h-3 w-3 text-blue-600 dark:text-blue-400" />
+              <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">Lot:</span>
+              <span className="text-xs text-blue-900 dark:text-blue-100 truncate max-w-xs">{vaccin.numeroLot}</span>
             </div>
           )}
-          
+
+          {/* Administration */}
           {vaccin.modeAdministration && (
-            <div className="flex items-center gap-2 p-2 bg-muted/50 rounded-lg">
-              <Activity className="h-4 w-4 text-muted-foreground" />
-              <div className="min-w-0">
-                <p className="text-xs text-muted-foreground">Administration</p>
-                <p className="text-sm font-medium truncate">
-                  {ModeAdministrationLabels[vaccin.modeAdministration] || vaccin.modeAdministration}
-                </p>
-              </div>
+            <div className="flex items-center gap-1.5 px-2 py-1.5 bg-blue-50 dark:bg-blue-950/20 rounded-md border border-blue-200 dark:border-blue-800">
+              <Activity className="h-3 w-3 text-blue-600 dark:text-blue-400" />
+              <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">Admin:</span>
+              <span className="text-xs text-blue-900 dark:text-blue-100">{ModeAdministrationLabels[vaccin.modeAdministration] || vaccin.modeAdministration}</span>
+            </div>
+          )}
+
+          {/* Température */}
+          {vaccin.temperatureConservation && (
+            <div className="flex items-center gap-1.5 px-2 py-1.5 bg-blue-50 dark:bg-blue-950/20 rounded-md border border-blue-200 dark:border-blue-800">
+              <Thermometer className="h-3 w-3 text-blue-600 dark:text-blue-400" />
+              <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">Temp:</span>
+              <span className="text-xs text-blue-900 dark:text-blue-100">{vaccin.temperatureConservation}</span>
             </div>
           )}
         </div>
-
-        {/* Dates */}
-        <div className="space-y-2">
-          {vaccin.dateExpiration && (
-            <div className={`flex items-center justify-between p-2 rounded-lg ${
-              isExpired ? 'bg-red-50 dark:bg-red-950/30' : 
-              isExpiringSoon ? 'bg-amber-50 dark:bg-amber-950/30' : 
-              'bg-emerald-50 dark:bg-emerald-950/30'
-            }`}>
-              <div className="flex items-center gap-2">
-                <Calendar className={`h-4 w-4 ${
-                  isExpired ? 'text-red-500' : 
-                  isExpiringSoon ? 'text-amber-500' : 
-                  'text-emerald-500'
-                }`} />
-                <span className="text-sm">Expiration</span>
-              </div>
-              <span className={`text-sm font-medium ${
-                isExpired ? 'text-red-600' : 
-                isExpiringSoon ? 'text-amber-600' : 
-                'text-emerald-600'
-              }`}>
-                {format(parseISO(vaccin.dateExpiration), 'dd MMM yyyy', { locale: fr })}
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* Conservation */}
-        {vaccin.temperatureConservation && (
-          <div className="flex items-center gap-2 p-2 bg-blue-50 dark:bg-blue-950/30 rounded-lg">
-            <Thermometer className="h-4 w-4 text-blue-500" />
-            <span className="text-sm text-blue-700 dark:text-blue-300">
-              {vaccin.temperatureConservation}
-            </span>
-          </div>
-        )}
-
-        {/* Quantité */}
-        {vaccin.quantiteDisponible !== undefined && vaccin.quantiteDisponible !== null && (
-          <div className="flex items-center justify-between p-2 bg-muted/50 rounded-lg">
-            <span className="text-sm text-muted-foreground">Stock disponible</span>
-            <Badge variant={vaccin.quantiteDisponible > 100 ? 'default' : vaccin.quantiteDisponible > 0 ? 'secondary' : 'destructive'}>
-              {vaccin.quantiteDisponible} doses
-            </Badge>
-          </div>
-        )}
-
-        {/* Effets secondaires */}
-        {vaccin.effetsSecondaires && (
-          <>
-            <Separator />
-            <div className="space-y-1">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <AlertTriangle className="h-3 w-3" />
-                <span>Effets secondaires possibles</span>
-              </div>
-              <p className="text-xs text-muted-foreground line-clamp-2">
-                {vaccin.effetsSecondaires}
-              </p>
-            </div>
-          </>
-        )}
       </CardContent>
-
-      <CardFooter className="pt-0">
-        <Button 
-          variant="outline" 
-          className="w-full" 
-          onClick={() => onView(vaccin)}
-        >
-          <FileText className="mr-2 h-4 w-4" />
-          Voir les détails
-        </Button>
-      </CardFooter>
     </Card>
   );
 }
@@ -351,35 +267,37 @@ function VaccinForm({ vaccin, onSubmit, onCancel, isLoading }: VaccinFormProps) 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Nom */}
         <div className="space-y-2">
-          <Label htmlFor="nom">Nom du vaccin *</Label>
+          <Label htmlFor="nom" className="text-slate-700 dark:text-slate-300 font-semibold">Nom du vaccin *</Label>
           <Input
             id="nom"
             value={formData.nom}
             onChange={(e) => setFormData({ ...formData, nom: e.target.value })}
             placeholder="Ex: Pentavalent (Penta 1)"
             required
+            className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900"
           />
         </div>
 
         {/* Fabricant */}
         <div className="space-y-2">
-          <Label htmlFor="fabricant">Fabricant</Label>
+          <Label htmlFor="fabricant" className="text-slate-700 dark:text-slate-300 font-semibold">Fabricant</Label>
           <Input
             id="fabricant"
             value={formData.fabricant}
             onChange={(e) => setFormData({ ...formData, fabricant: e.target.value })}
             placeholder="Ex: Serum Institute of India"
+            className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900"
           />
         </div>
 
         {/* Type de vaccin */}
         <div className="space-y-2">
-          <Label htmlFor="typeVaccin">Type de vaccin *</Label>
+          <Label htmlFor="typeVaccin" className="text-slate-700 dark:text-slate-300 font-semibold">Type de vaccin *</Label>
           <Select 
             value={formData.typeVaccin} 
             onValueChange={(v) => setFormData({ ...formData, typeVaccin: v as TypeVaccinEnum })}
           >
-            <SelectTrigger>
+            <SelectTrigger className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900">
               <SelectValue placeholder="Sélectionner un type" />
             </SelectTrigger>
             <SelectContent>
@@ -392,12 +310,12 @@ function VaccinForm({ vaccin, onSubmit, onCancel, isLoading }: VaccinFormProps) 
 
         {/* Mode d'administration */}
         <div className="space-y-2">
-          <Label htmlFor="modeAdministration">Mode d'administration</Label>
+          <Label htmlFor="modeAdministration" className="text-slate-700 dark:text-slate-300 font-semibold">Mode d'administration</Label>
           <Select 
             value={formData.modeAdministration || ''} 
             onValueChange={(v) => setFormData({ ...formData, modeAdministration: v as ModeAdministrationEnum })}
           >
-            <SelectTrigger>
+            <SelectTrigger className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900">
               <SelectValue placeholder="Sélectionner un mode" />
             </SelectTrigger>
             <SelectContent>
@@ -410,23 +328,24 @@ function VaccinForm({ vaccin, onSubmit, onCancel, isLoading }: VaccinFormProps) 
 
         {/* Numéro de lot */}
         <div className="space-y-2">
-          <Label htmlFor="numeroLot">Numéro de lot</Label>
+          <Label htmlFor="numeroLot" className="text-slate-700 dark:text-slate-300 font-semibold">Numéro de lot</Label>
           <Input
             id="numeroLot"
             value={formData.numeroLot}
             onChange={(e) => setFormData({ ...formData, numeroLot: e.target.value })}
             placeholder="Ex: PT789-2024"
+            className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900"
           />
         </div>
 
         {/* Période */}
         <div className="space-y-2">
-          <Label htmlFor="periode">Période de vaccination</Label>
+          <Label htmlFor="periode" className="text-slate-700 dark:text-slate-300 font-semibold">Période de vaccination</Label>
           <Select 
             value={formData.periode || ''} 
             onValueChange={(v) => setFormData({ ...formData, periode: v as PeriodeVaccinationEnum })}
           >
-            <SelectTrigger>
+            <SelectTrigger className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900">
               <SelectValue placeholder="Sélectionner une période" />
             </SelectTrigger>
             <SelectContent>
@@ -439,40 +358,43 @@ function VaccinForm({ vaccin, onSubmit, onCancel, isLoading }: VaccinFormProps) 
 
         {/* Date de production */}
         <div className="space-y-2">
-          <Label htmlFor="dateProduction">Date de production</Label>
+          <Label htmlFor="dateProduction" className="text-slate-700 dark:text-slate-300 font-semibold">Date de production</Label>
           <Input
             id="dateProduction"
             type="date"
             value={formData.dateProduction}
             onChange={(e) => setFormData({ ...formData, dateProduction: e.target.value })}
+            className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900"
           />
         </div>
 
         {/* Date d'expiration */}
         <div className="space-y-2">
-          <Label htmlFor="dateExpiration">Date d'expiration</Label>
+          <Label htmlFor="dateExpiration" className="text-slate-700 dark:text-slate-300 font-semibold">Date d'expiration</Label>
           <Input
             id="dateExpiration"
             type="date"
             value={formData.dateExpiration}
             onChange={(e) => setFormData({ ...formData, dateExpiration: e.target.value })}
+            className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900"
           />
         </div>
 
         {/* Température de conservation */}
         <div className="space-y-2">
-          <Label htmlFor="temperatureConservation">Température de conservation</Label>
+          <Label htmlFor="temperatureConservation" className="text-slate-700 dark:text-slate-300 font-semibold">Température de conservation</Label>
           <Input
             id="temperatureConservation"
             value={formData.temperatureConservation}
             onChange={(e) => setFormData({ ...formData, temperatureConservation: e.target.value })}
             placeholder="Ex: 2°C - 8°C"
+            className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900"
           />
         </div>
 
         {/* Doses requises */}
         <div className="space-y-2">
-          <Label htmlFor="dosesRequises">Doses requises</Label>
+          <Label htmlFor="dosesRequises" className="text-slate-700 dark:text-slate-300 font-semibold">Doses requises</Label>
           <Input
             id="dosesRequises"
             type="number"
@@ -480,12 +402,13 @@ function VaccinForm({ vaccin, onSubmit, onCancel, isLoading }: VaccinFormProps) 
             value={formData.dosesRequises || ''}
             onChange={(e) => setFormData({ ...formData, dosesRequises: e.target.value ? Number(e.target.value) : undefined })}
             placeholder="Ex: 3"
+            className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900"
           />
         </div>
 
         {/* Quantité disponible */}
         <div className="space-y-2">
-          <Label htmlFor="quantiteDisponible">Quantité disponible</Label>
+          <Label htmlFor="quantiteDisponible" className="text-slate-700 dark:text-slate-300 font-semibold">Quantité disponible</Label>
           <Input
             id="quantiteDisponible"
             type="number"
@@ -493,50 +416,54 @@ function VaccinForm({ vaccin, onSubmit, onCancel, isLoading }: VaccinFormProps) 
             value={formData.quantiteDisponible || ''}
             onChange={(e) => setFormData({ ...formData, quantiteDisponible: e.target.value ? Number(e.target.value) : undefined })}
             placeholder="Ex: 500"
+            className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900"
           />
         </div>
 
         {/* Dosage */}
         <div className="space-y-2">
-          <Label htmlFor="dosage">Dosage</Label>
+          <Label htmlFor="dosage" className="text-slate-700 dark:text-slate-300 font-semibold">Dosage</Label>
           <Input
             id="dosage"
             value={formData.dosage}
             onChange={(e) => setFormData({ ...formData, dosage: e.target.value })}
             placeholder="Ex: 0.5 ml"
+            className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900"
           />
         </div>
       </div>
 
       {/* Description */}
       <div className="space-y-2">
-        <Label htmlFor="description">Description</Label>
+        <Label htmlFor="description" className="text-slate-700 dark:text-slate-300 font-semibold">Description</Label>
         <Textarea
           id="description"
           value={formData.description}
           onChange={(e) => setFormData({ ...formData, description: e.target.value })}
           placeholder="Description du vaccin..."
           rows={3}
+          className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900"
         />
       </div>
 
       {/* Effets secondaires */}
       <div className="space-y-2">
-        <Label htmlFor="effetsSecondaires">Effets secondaires possibles</Label>
+        <Label htmlFor="effetsSecondaires" className="text-slate-700 dark:text-slate-300 font-semibold">Effets secondaires possibles</Label>
         <Textarea
           id="effetsSecondaires"
           value={formData.effetsSecondaires}
           onChange={(e) => setFormData({ ...formData, effetsSecondaires: e.target.value })}
           placeholder="Liste des effets secondaires possibles..."
           rows={2}
+          className="border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900"
         />
       </div>
 
-      <DialogFooter>
-        <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading}>
+      <DialogFooter className="gap-2">
+        <Button type="button" variant="outline" className="border-slate-300 dark:border-slate-700" onClick={onCancel} disabled={isLoading}>
           Annuler
         </Button>
-        <Button type="submit" disabled={isLoading}>
+        <Button type="submit" className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white font-semibold shadow-md" disabled={isLoading}>
           {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           {vaccin ? 'Mettre à jour' : 'Créer le vaccin'}
         </Button>
@@ -562,18 +489,18 @@ function VaccinDetailsModal({ vaccin, open, onClose }: VaccinDetailsModalProps) 
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-white dark:bg-slate-900 border-0">
+        <div className="bg-gradient-to-r from-blue-600 to-blue-500 px-6 py-6 -mx-6 -mt-6 rounded-t-lg">
           <div className="flex items-center gap-3">
-            <div className={`p-3 rounded-xl ${isExpired ? 'bg-red-100' : 'bg-primary/10'}`}>
-              <Syringe className={`h-6 w-6 ${isExpired ? 'text-red-500' : 'text-primary'}`} />
+            <div className="bg-white/20 p-2 rounded-lg">
+              <Syringe className="h-6 w-6 text-white" />
             </div>
             <div>
-              <DialogTitle className="text-xl">{vaccin.nom}</DialogTitle>
-              <DialogDescription>{vaccin.fabricant || 'Fabricant non spécifié'}</DialogDescription>
+              <h2 className="text-2xl font-bold text-white drop-shadow-lg">{vaccin.nom}</h2>
+              <p className="text-blue-100 text-sm mt-1">{vaccin.fabricant || 'Fabricant non spécifié'}</p>
             </div>
           </div>
-        </DialogHeader>
+        </div>
 
         <div className="space-y-6 py-4">
           {/* Badges */}
@@ -780,72 +707,86 @@ export default function VaccinPage() {
       title="Gestion des Vaccins" 
       subtitle="Gérez le catalogue des vaccins disponibles dans votre centre"
     >
+      {/* Page Header with Gradient */}
+      <div className="bg-gradient-to-r from-blue-600 via-blue-500 to-blue-400 px-6 py-12 sm:px-8 lg:px-12 shadow-2xl rounded-lg mb-8">
+        <h1 className="text-4xl sm:text-5xl font-black text-white drop-shadow-lg">Gestion des Vaccins</h1>
+        <p className="text-lg text-blue-50 font-medium mt-2 drop-shadow">Gérez le catalogue des vaccins disponibles</p>
+      </div>
+
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-4 mb-6">
-        <Card>
+        <Card className="bg-gradient-to-br from-blue-50 to-white dark:from-blue-900/20 dark:to-slate-900 border-blue-200 dark:border-blue-800 hover:shadow-xl transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Vaccins</CardTitle>
-            <Syringe className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium text-blue-700 dark:text-blue-300">Total Vaccins</CardTitle>
+            <div className="bg-blue-100 dark:bg-blue-900/50 p-2 rounded-lg">
+              <Syringe className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.total}</div>
-            <p className="text-xs text-muted-foreground">Types de vaccins</p>
+            <div className="text-4xl font-black text-blue-700">{stats.total}</div>
+            <p className="text-xs text-blue-600/70 font-semibold mt-1">Types de vaccins</p>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="bg-gradient-to-br from-orange-50 to-white dark:from-orange-900/20 dark:to-slate-900 border-orange-200 dark:border-orange-800 hover:shadow-xl transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Expire bientôt</CardTitle>
-            <Clock className="h-4 w-4 text-amber-500" />
+            <CardTitle className="text-sm font-medium text-orange-700 dark:text-orange-300">Expire bientôt</CardTitle>
+            <div className="bg-orange-100 dark:bg-orange-900/50 p-2 rounded-lg">
+              <Clock className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-amber-600">{stats.expiringSoon}</div>
-            <p className="text-xs text-muted-foreground">Dans les 3 prochains mois</p>
+            <div className="text-4xl font-black text-orange-700">{stats.expiringSoon}</div>
+            <p className="text-xs text-orange-600/70 font-semibold mt-1">3 prochains mois</p>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="bg-gradient-to-br from-red-50 to-white dark:from-red-900/20 dark:to-slate-900 border-red-200 dark:border-red-800 hover:shadow-xl transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Expirés</CardTitle>
-            <XCircle className="h-4 w-4 text-red-500" />
+            <CardTitle className="text-sm font-medium text-red-700 dark:text-red-300">Expirés</CardTitle>
+            <div className="bg-red-100 dark:bg-red-900/50 p-2 rounded-lg">
+              <XCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">{stats.expired}</div>
-            <p className="text-xs text-muted-foreground">À retirer du stock</p>
+            <div className="text-4xl font-black text-red-700">{stats.expired}</div>
+            <p className="text-xs text-red-600/70 font-semibold mt-1">À retirer du stock</p>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="bg-gradient-to-br from-green-50 to-white dark:from-green-900/20 dark:to-slate-900 border-green-200 dark:border-green-800 hover:shadow-xl transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Stock faible</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-orange-500" />
+            <CardTitle className="text-sm font-medium text-green-700 dark:text-green-300">Stock faible</CardTitle>
+            <div className="bg-green-100 dark:bg-green-900/50 p-2 rounded-lg">
+              <AlertTriangle className="h-5 w-5 text-green-600 dark:text-green-400" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-orange-600">{stats.lowStock}</div>
-            <p className="text-xs text-muted-foreground">{"< 50 doses"}</p>
+            <div className="text-4xl font-black text-green-700">{stats.lowStock}</div>
+            <p className="text-xs text-green-600/70 font-semibold mt-1">{"< 50 doses"}</p>
           </CardContent>
         </Card>
       </div>
 
       {/* Actions Bar */}
-      <Card className="mb-6">
+      <Card className="mb-6 border-blue-200 dark:border-blue-800">
         <CardContent className="pt-6">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             {/* Search */}
             <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-blue-500" />
               <Input
                 placeholder="Rechercher par nom, fabricant, n° lot..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
+                className="pl-10 border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900"
               />
             </div>
 
             {/* Filters & Actions */}
             <div className="flex flex-wrap gap-2">
               <Select value={typeFilter} onValueChange={setTypeFilter}>
-                <SelectTrigger className="w-[180px]">
+                <SelectTrigger className="w-[180px] border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-200 dark:focus:ring-blue-900">
                   <SelectValue placeholder="Type de vaccin" />
                 </SelectTrigger>
                 <SelectContent>
@@ -875,7 +816,7 @@ export default function VaccinPage() {
                 <Download className="h-4 w-4" />
               </Button>
 
-              <Button onClick={() => setIsCreateModalOpen(true)}>
+              <Button className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white font-semibold shadow-md" onClick={() => setIsCreateModalOpen(true)}>
                 <Plus className="mr-2 h-4 w-4" />
                 Ajouter un vaccin
               </Button>
@@ -893,16 +834,6 @@ export default function VaccinPage() {
           </AlertDescription>
         </Alert>
       )}
-
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h2 className="text-xl font-semibold">Catalogue des Vaccins</h2>
-          <p className="text-sm text-muted-foreground">
-            {filteredVaccins.length} vaccin(s) trouvé(s)
-          </p>
-        </div>
-      </div>
 
       {/* Grid View */}
       {viewMode === 'grid' && (
@@ -930,7 +861,7 @@ export default function VaccinPage() {
                     Réinitialiser la recherche
                   </Button>
                 ) : (
-                  <Button onClick={() => setIsCreateModalOpen(true)}>
+                  <Button className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white font-semibold shadow-md" onClick={() => setIsCreateModalOpen(true)}>
                     <Plus className="mr-2 h-4 w-4" />
                     Ajouter un vaccin
                   </Button>
@@ -938,7 +869,7 @@ export default function VaccinPage() {
               </div>
             </Card>
           ) : (
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {paginatedVaccins.map((vaccin) => (
                 <VaccinCard
                   key={vaccin.id}
@@ -1110,36 +1041,50 @@ export default function VaccinPage() {
 
       {/* Create Modal */}
       <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Ajouter un nouveau vaccin</DialogTitle>
-            <DialogDescription>
-              Remplissez les informations du vaccin à ajouter au catalogue
-            </DialogDescription>
-          </DialogHeader>
-          <VaccinForm
-            onSubmit={handleCreate}
-            onCancel={() => setIsCreateModalOpen(false)}
-            isLoading={createVaccinMutation.isPending}
-          />
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto bg-white dark:bg-slate-900 border-0">
+          <div className="bg-gradient-to-r from-blue-600 to-blue-500 px-6 py-6 -mx-6 -mt-6 rounded-t-lg">
+            <div className="flex items-center gap-3">
+              <div className="bg-white/20 p-2 rounded-lg">
+                <Plus className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-white drop-shadow-lg">Ajouter un nouveau vaccin</h2>
+                <p className="text-blue-100 text-sm mt-1">Remplissez les informations du vaccin</p>
+              </div>
+            </div>
+          </div>
+          <div className="pt-6">
+            <VaccinForm
+              onSubmit={handleCreate}
+              onCancel={() => setIsCreateModalOpen(false)}
+              isLoading={createVaccinMutation.isPending}
+            />
+          </div>
         </DialogContent>
       </Dialog>
 
       {/* Edit Modal */}
       <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Modifier le vaccin</DialogTitle>
-            <DialogDescription>
-              Modifiez les informations du vaccin
-            </DialogDescription>
-          </DialogHeader>
-          <VaccinForm
-            vaccin={selectedVaccin}
-            onSubmit={handleUpdate}
-            onCancel={() => { setIsEditModalOpen(false); setSelectedVaccin(null); }}
-            isLoading={updateVaccinMutation.isPending}
-          />
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto bg-white dark:bg-slate-900 border-0">
+          <div className="bg-gradient-to-r from-blue-600 to-blue-500 px-6 py-6 -mx-6 -mt-6 rounded-t-lg">
+            <div className="flex items-center gap-3">
+              <div className="bg-white/20 p-2 rounded-lg">
+                <Pencil className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-white drop-shadow-lg">Modifier le vaccin</h2>
+                <p className="text-blue-100 text-sm mt-1">Modifiez les informations du vaccin</p>
+              </div>
+            </div>
+          </div>
+          <div className="pt-6">
+            <VaccinForm
+              vaccin={selectedVaccin}
+              onSubmit={handleUpdate}
+              onCancel={() => { setIsEditModalOpen(false); setSelectedVaccin(null); }}
+              isLoading={updateVaccinMutation.isPending}
+            />
+          </div>
         </DialogContent>
       </Dialog>
 
