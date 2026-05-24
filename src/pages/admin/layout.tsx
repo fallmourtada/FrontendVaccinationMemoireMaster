@@ -1,7 +1,7 @@
 import { AppHeader } from "@/components/shared/app-header";
 import { AppSidebar } from "@/components/shared/app-sidebar";
 import { SidebarProvider } from "@/components/ui/sidebar";
-import { LayoutDashboard, Users, UserCheck, MapPin, Database, BarChart3, Settings, Inbox, MessageCircle, Baby, Heart, CalendarDays, Syringe, Home } from "lucide-react";
+import { LayoutDashboard, Users, UserCheck, MapPin, Database, BarChart3, Settings, Inbox, MessageCircle, Baby, Heart, CalendarDays, Syringe, Home, FileText } from "lucide-react";
 import { Outlet } from "react-router-dom";
 import { useDecodedToken } from "@/contexts/decoded-token-context";
 
@@ -74,6 +74,13 @@ export default function AdminLayout() {
               { icon: Heart, label: "Vaccinations", path: "/medecin/vaccinations" },
               { icon: CalendarDays, label: "Rendez-vous", path: "/medecin/rendez-vous" },
             ] : []),
+        ]
+        },
+        {
+        title: "RAPPORTS",
+        items: [
+            ...(isInfirmier ? [{ icon: FileText, label: "Rapport mensuel vaccins", path: "/admin/rapport-mensuel" }] : []),
+            ...(isIcp ? [{ icon: FileText, label: "Rapports des postes (district)", path: "/admin/rapports-district" }] : []),
         ]
         },
         {

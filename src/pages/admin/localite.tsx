@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -18,17 +18,23 @@ import {
   Sparkles,
   Pencil,
   Trash2,
-  UserPlus
+  UserPlus,
+  BarChart3
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import PageContainer from '@/components/shared/page-container';
-import localityService from '@/services/locality.service';
+import localityService, { resolveDistrictIdFromCentre, type Centre } from '@/services/locality.service';
 import apiClient from '@/utils/api-client';
 import type { LocaliteDTO } from '@/types/localite';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import type { UtilisateurDTO } from '@/types';
+import { useDecodedToken } from '@/contexts/decoded-token-context';
+import { useUserByEmail } from '@/services/user.service';
 
 type NavigationLevel = 'regions' | 'departments' | 'districts' | 'centres';
+
+const normalizeRole = (role?: string | null) => (role || '').replace(/^ROLE_/, '').toUpperCase();
 
 const numId = (v: unknown): number | null => {
   if (v === null || v === undefined) return null;
@@ -89,6 +95,19 @@ const normalizeRegionName = (value: string): string => value.trim().toUpperCase(
 
 export default function LocalitePage() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const { decodedToken } = useDecodedToken();
+  const normalizedRole = useMemo(
+    () => normalizeRole(decodedToken?.role),
+    [decodedToken?.role]
+  );
+  const isAdmin = normalizedRole === 'ADMIN';
+  const isICP = normalizedRole === 'ICP';
+  const isInfirmier = normalizedRole === 'INFIRMIER';
+  const needsScopedGeo = isICP || isInfirmier;
+
+  const { data: currentUser, isLoading: loadingCurrentUser } = useUserByEmail(decodedToken?.sub || '');
+
   // ===== STATE =====
   const [currentLevel, setCurrentLevel] = useState<NavigationLevel>('regions');
   const [breadcrumb, setBreadcrumb] = useState<BreadcrumbItem[]>([
@@ -116,10 +135,101 @@ export default function LocalitePage() {
     age: '',
   });
 
+  const [scopedNavReady, setScopedNavReady] = useState(!needsScopedGeo);
+  const [scopeHint, setScopeHint] = useState<null | 'no_district' | 'no_centre' | 'geo_failed'>(null);
+
+  useEffect(() => {
+    setScopeHint(null);
+    if (!needsScopedGeo) {
+      setScopedNavReady(true);
+      return;
+    }
+    if (loadingCurrentUser) {
+      setScopedNavReady(false);
+      return;
+    }
+    if (!currentUser) {
+      setScopedNavReady(true);
+      return;
+    }
+
+    let cancelled = false;
+    setScopedNavReady(false);
+
+    const run = async () => {
+      try {
+        if (isICP) {
+          const distId = numId(
+            (currentUser as UtilisateurDTO & { centre?: { locality?: { id?: unknown } } }).centre?.locality?.id
+          );
+          if (!distId) {
+            if (!cancelled) setScopeHint('no_district');
+            return;
+          }
+          const district = await localityService.getLocalityById(distId);
+          if (cancelled) return;
+          const dept = district.parent;
+          const region = dept?.parent;
+          setSelectedIds({
+            region: numId(region?.id) ?? undefined,
+            department: numId(dept?.id) ?? undefined,
+            district: distId,
+          });
+          setBreadcrumb([
+            { label: 'Mon district', level: 'districts' },
+            { label: district.name, level: 'districts', id: distId },
+          ]);
+          setCurrentLevel('districts');
+        } else if (isInfirmier) {
+          const centreId = numId(
+            (currentUser as UtilisateurDTO & { centre?: { id?: unknown } }).centre?.id
+          );
+          if (!centreId) {
+            if (!cancelled) setScopeHint('no_centre');
+            return;
+          }
+          const centre = (await localityService.getCentreById(centreId)) as Centre;
+          if (cancelled) return;
+          const districtLocalityId = resolveDistrictIdFromCentre(centre);
+          if (districtLocalityId != null) {
+            const districtLoc = await localityService.getLocalityById(districtLocalityId);
+            if (cancelled) return;
+            const dept = districtLoc.parent;
+            const region = dept?.parent;
+            setSelectedIds({
+              region: numId(region?.id) ?? undefined,
+              department: numId(dept?.id) ?? undefined,
+              district: districtLocalityId,
+            });
+          }
+          setBreadcrumb([
+            { label: 'Mon poste de santé', level: 'centres' },
+            { label: centre.name, level: 'centres', id: centreId },
+          ]);
+          setCurrentLevel('centres');
+        }
+      } catch {
+        if (!cancelled) setScopeHint('geo_failed');
+      } finally {
+        if (!cancelled) setScopedNavReady(true);
+      }
+    };
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [needsScopedGeo, isICP, isInfirmier, currentUser, loadingCurrentUser]);
+
+  useEffect(() => {
+    if (!isAdmin && activeTab === 'carte') setActiveTab('hierarchie');
+  }, [isAdmin, activeTab]);
+
   // ===== QUERIES =====
   const { data: regions = [], isLoading: loadingRegions } = useQuery({
     queryKey: ['regions'],
     queryFn: () => localityService.getAllRegions(),
+    enabled: isAdmin,
   });
 
   const { data: departments = [], isLoading: loadingDepartments } = useQuery({
@@ -312,16 +422,36 @@ export default function LocalitePage() {
     setCurrentLevel('districts');
   }, []);
 
-  const handleSelectDistrict = useCallback((district: LocaliteDTO) => {
-    setSelectedIds(prev => ({ ...prev, district: district.id }));
-    setBreadcrumb(prev => [
-      ...prev.slice(0, 3),
-      { label: district.name, level: 'districts', id: district.id }
-    ]);
-    setCurrentLevel('centres');
-  }, []);
+  const handleSelectDistrict = useCallback(
+    (district: LocaliteDTO) => {
+      const did = numId(district.id) ?? undefined;
+      setSelectedIds((prev) => ({ ...prev, district: did }));
+      setBreadcrumb((prev) => {
+        if (isICP) {
+          return [
+            { label: 'Mon district', level: 'districts' },
+            { label: district.name, level: 'districts', id: did },
+          ];
+        }
+        return [...prev.slice(0, 3), { label: district.name, level: 'districts', id: did }];
+      });
+      setCurrentLevel('centres');
+    },
+    [isICP]
+  );
 
   const handleBreadcrumbClick = (item: BreadcrumbItem, index: number) => {
+    if (isICP && item.level === 'districts' && item.id != null) {
+      setBreadcrumb(breadcrumb.slice(0, index + 1));
+      setCurrentLevel('districts');
+      return;
+    }
+    if (isInfirmier && item.level === 'centres') {
+      setBreadcrumb(breadcrumb.slice(0, index + 1));
+      setCurrentLevel('centres');
+      return;
+    }
+
     setBreadcrumb(breadcrumb.slice(0, index + 1));
     setCurrentLevel(item.level);
 
@@ -446,7 +576,8 @@ export default function LocalitePage() {
     }
   };
 
-  const isLoading = loadingRegions || loadingDepartments || loadingDistricts || loadingCentres;
+  const isLoading =
+    (isAdmin && loadingRegions) || loadingDepartments || loadingDistricts || loadingCentres;
   const filteredData = () => {
     const term = searchTerm.toLowerCase();
     let data: any[] = [];
@@ -457,29 +588,100 @@ export default function LocalitePage() {
       data = departments;
     } else if (currentLevel === 'districts') {
       data = districts;
+      const scopedDistrictId = numId(selectedIds.district);
+      if (isICP && scopedDistrictId != null) {
+        data = data.filter((item) => numId(item.id) === scopedDistrictId);
+      }
     } else if (currentLevel === 'centres') {
       data = centres;
+      if (isInfirmier && currentUser) {
+        const cid = numId((currentUser as UtilisateurDTO & { centre?: { id?: unknown } }).centre?.id);
+        if (cid != null) {
+          data = data.filter((item) => numId(item.id) === cid);
+        }
+      }
     }
 
-    return data.filter(item => item.name.toLowerCase().includes(term));
+    return data.filter((item) => (item.name || '').toLowerCase().includes(term));
   };
 
   const selectedRegionName = breadcrumb[1]?.label ? normalizeRegionName(breadcrumb[1].label) : '';
   const selectedDepartmentName = breadcrumb[2]?.label || '';
-  const selectedDistrictName = breadcrumb[3]?.label || '';
+  const selectedDistrictName = isICP ? breadcrumb[1]?.label || '' : breadcrumb[3]?.label || '';
+
+  const pageSubtitle = isAdmin
+    ? 'Vue hiérarchique des régions, départements, districts et centres de santé du Sénégal'
+    : isICP
+      ? 'Vue ICP : votre district et les postes de santé rattachés'
+      : isInfirmier
+        ? 'Vue infirmier : votre poste de santé uniquement'
+        : 'Localités';
+
+  const hideBackButton =
+    (isInfirmier && currentLevel === 'centres') || (isICP && currentLevel === 'districts');
+
+  const showScopedLoader = needsScopedGeo && !scopedNavReady;
+  const showScopedProfileError =
+    needsScopedGeo && scopedNavReady && !loadingCurrentUser && !currentUser;
+  const showScopeHintCard = needsScopedGeo && scopedNavReady && !!currentUser && scopeHint !== null;
+  const showMainHierarchy =
+    !needsScopedGeo || (scopedNavReady && !!currentUser && scopeHint === null);
 
   return (
-    <PageContainer 
-      title="Gestion des Localités" 
-      subtitle="Vue hiérarchique des régions, départements, districts et centres de santé du Sénégal"
-    >
+    <PageContainer title="Gestion des Localités" subtitle={pageSubtitle}>
       <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'hierarchie' | 'carte')} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+        <TabsList
+          className={
+            isAdmin
+              ? 'grid w-full grid-cols-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800'
+              : 'grid w-full grid-cols-1 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800'
+          }
+        >
           <TabsTrigger value="hierarchie">Gestion Hiérarchique</TabsTrigger>
-          <TabsTrigger value="carte">Carte du Sénégal (Aperçu)</TabsTrigger>
+          {isAdmin ? <TabsTrigger value="carte">Carte du Sénégal (Aperçu)</TabsTrigger> : null}
         </TabsList>
 
         <TabsContent value="hierarchie" className="space-y-6 mt-0">
+          {showScopedLoader && (
+            <Card className="border-blue-200 bg-blue-50/80 dark:border-blue-800 dark:bg-blue-950/30">
+              <CardContent className="flex items-center gap-3 py-6">
+                <Loader2 className="h-8 w-8 shrink-0 animate-spin text-blue-600" />
+                <p className="text-sm text-slate-700 dark:text-slate-300">
+                  Chargement de votre périmètre (profil utilisateur ou localités)…
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {showScopedProfileError && (
+            <Card className="border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30">
+              <CardContent className="py-6">
+                <p className="flex items-start gap-2 text-sm font-medium text-amber-900 dark:text-amber-100">
+                  <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
+                  Profil utilisateur indisponible. Démarrez le <strong>user-service</strong> (API), puis
+                  rechargez la page.
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {showScopeHintCard && (
+            <Card className="border-rose-200 bg-rose-50 dark:border-rose-900 dark:bg-rose-950/30">
+              <CardContent className="py-6">
+                <p className="flex items-start gap-2 text-sm font-medium text-rose-900 dark:text-rose-100">
+                  <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
+                  {scopeHint === 'no_district' &&
+                    'Compte ICP : aucun district (localité) rattaché dans le profil.'}
+                  {scopeHint === 'no_centre' &&
+                    'Compte infirmier : aucun poste de santé rattaché dans le profil.'}
+                  {scopeHint === 'geo_failed' &&
+                    'Erreur lors du chargement des localités. Vérifiez le service localités.'}
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {showMainHierarchy && (
       <div className="space-y-6">
         {/* Navigation Breadcrumb */}
         <div className="bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-lg shadow-md p-4 border-2 border-blue-200 dark:border-blue-800">
@@ -487,7 +689,15 @@ export default function LocalitePage() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => handleBreadcrumbClick(breadcrumb[0], 0)}
+              onClick={() => {
+                if (isInfirmier) return;
+                if (isICP) {
+                  setCurrentLevel('districts');
+                  if (breadcrumb.length >= 2) setBreadcrumb(breadcrumb.slice(0, 2));
+                  return;
+                }
+                handleBreadcrumbClick(breadcrumb[0], 0);
+              }}
               className="text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 font-bold"
             >
               <Home className="h-4 w-4 mr-1" />
@@ -515,7 +725,7 @@ export default function LocalitePage() {
 
         {/* Search and Add */}
         <div className="flex gap-3">
-          {currentLevel !== 'regions' && (
+          {currentLevel !== 'regions' && !hideBackButton && (
             <Button
               variant="outline"
               onClick={handleBack}
@@ -531,6 +741,7 @@ export default function LocalitePage() {
             onChange={(e) => setSearchTerm(e.target.value)}
             className="border-2 border-blue-300 dark:border-blue-800 rounded-full focus:ring-blue-500 focus:border-blue-500 placeholder:text-slate-500"
           />
+          {isAdmin ? (
           <Button
             onClick={() => setShowAddForm(!showAddForm)}
             className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white font-bold shadow-lg transition-all"
@@ -538,6 +749,7 @@ export default function LocalitePage() {
             <Plus className="h-4 w-4 mr-2" />
             Ajouter
           </Button>
+          ) : null}
         </div>
 
         {/* Add Form */}
@@ -832,6 +1044,7 @@ export default function LocalitePage() {
                     className="space-y-2"
                     onClick={(e) => e.stopPropagation()}
                   >
+                    {isAdmin ? (
                     <div className="grid grid-cols-2 gap-2">
                       <Button
                         variant="outline"
@@ -863,8 +1076,10 @@ export default function LocalitePage() {
                         )}
                       </Button>
                     </div>
+                    ) : null}
                     {currentLevel === 'districts' && (
                       <>
+                        {isAdmin ? (
                         <Button
                           variant="outline"
                           size="sm"
@@ -876,6 +1091,7 @@ export default function LocalitePage() {
                           <UserPlus className="mr-2 h-4 w-4 shrink-0" />
                           <span className="break-words leading-tight">Inscrire ICP</span>
                         </Button>
+                        ) : null}
                         <div className="rounded-md border border-indigo-100 bg-indigo-50/60 px-2.5 py-2 text-left text-xs text-slate-700">
                           <p className="mb-1.5 font-semibold text-indigo-900">ICP (chef de poste)</p>
                           {icpForLocalityDistrict(item.id).length === 0 ? (
@@ -900,6 +1116,29 @@ export default function LocalitePage() {
                         <Button
                           variant="outline"
                           size="sm"
+                          type="button"
+                          onClick={() =>
+                            navigate(`/admin/localites/centres/${item.id}/statistiques`, {
+                              state: {
+                                centre: {
+                                  id: item.id,
+                                  name: item.name,
+                                  type: item.type || 'POSTE_DE_SANTE',
+                                },
+                              },
+                            })
+                          }
+                          className="h-auto w-full min-w-0 border-sky-200 py-2 text-left text-sky-800 hover:bg-sky-50 dark:border-sky-900/60 dark:text-sky-200 dark:hover:bg-sky-900/20"
+                        >
+                          <BarChart3 className="mr-2 h-4 w-4 shrink-0" />
+                          <span className="break-words leading-tight">
+                            Voir les statistiques du poste de santé
+                          </span>
+                        </Button>
+                        {isAdmin ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
                           onClick={() => {
                             handleOpenStaffForm('INFIRMIER', item);
                           }}
@@ -908,6 +1147,7 @@ export default function LocalitePage() {
                           <UserPlus className="mr-2 h-4 w-4 shrink-0" />
                           <span className="break-words leading-tight">Ajouter Infirmier</span>
                         </Button>
+                        ) : null}
                         <div className="rounded-md border border-emerald-100 bg-emerald-50/60 px-2.5 py-2 text-left text-xs text-slate-700">
                           <p className="mb-1.5 font-semibold text-emerald-900">Infirmiers</p>
                           {infirmiersForCentre(item.id).length === 0 ? (
@@ -949,8 +1189,10 @@ export default function LocalitePage() {
           </CardContent>
         </Card>
       </div>
+          )}
         </TabsContent>
 
+        {isAdmin ? (
         <TabsContent value="carte" className="mt-0">
           <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
             <Card className="border-0 shadow-lg overflow-hidden">
@@ -1087,6 +1329,7 @@ export default function LocalitePage() {
             </Card>
           </div>
         </TabsContent>
+        ) : null}
       </Tabs>
     </PageContainer>
   );

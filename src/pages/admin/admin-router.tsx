@@ -9,6 +9,8 @@ import Rapport from "../medecin/rapport";
 import ConfigurationPage from "./configuration";
 import MessagePage from "./message";
 import CentreVaccinationStatsPage from "./centre-vaccination-stats";
+import RapportMensuelInfirmierPage from "./rapport-mensuel-infirmier";
+import RapportsDistrictIcpPage from "./rapports-district-icp";
 import AuthGuard from "@/helpers/auth-guard";
 import { useDecodedToken } from "@/contexts/decoded-token-context";
 
@@ -40,6 +42,8 @@ export default function AdminRouter() {
               <Route index element={<Navigate to="/admin/localites" replace />} />
               <Route path="localites" element={<LocalitePage />} />
               <Route path="localites/centres/:centreId/statistiques" element={<CentreVaccinationStatsPage />} />
+              <Route path="rapport-mensuel" element={<RapportMensuelInfirmierPage />} />
+              <Route path="rapports-district" element={<RapportsDistrictIcpPage />} />
             </>
           )}
 

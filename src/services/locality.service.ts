@@ -22,7 +22,7 @@ const toNumericId = (value: unknown): number | null => {
   return Number.isNaN(parsed) ? null : parsed;
 };
 
-const resolveDistrictIdFromCentre = (centre: Centre): number | null => {
+export const resolveDistrictIdFromCentre = (centre: Centre): number | null => {
   const directLocalityId = toNumericId(centre.locality?.id);
   if (directLocalityId !== null) return directLocalityId;
 

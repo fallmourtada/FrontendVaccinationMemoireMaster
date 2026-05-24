@@ -19,6 +19,8 @@ type MonthStat = {
   month: string;
   enrolled: number;
   vaccinated: number;
+  vaccinatedBoys: number;
+  vaccinatedGirls: number;
 };
 
 type CentreState = {
@@ -29,7 +31,20 @@ type CentreState = {
   };
 };
 
-const MONTHS = ["Mai", "Juin", "Juil", "Août", "Sep", "Oct", "Nov", "Déc", "Jan", "Fév", "Mar", "Avr"];
+const MONTHS = [
+  'Janvier',
+  'Février',
+  'Mars',
+  'Avril',
+  'Mai',
+  'Juin',
+  'Juillet',
+  'Août',
+  'Septembre',
+  'Octobre',
+  'Novembre',
+  'Décembre',
+];
 
 const toSafeInt = (value: string | undefined): number => {
   const parsed = Number(value);
@@ -46,7 +61,10 @@ const buildMonthlyStats = (centreId: number): MonthStat[] => {
     const base = 28 + Math.floor(seededRandom(centreId * 17 + index * 11) * 26);
     const vaccinatedRate = 0.64 + seededRandom(centreId * 9 + index * 3) * 0.28;
     const vaccinated = Math.min(base, Math.round(base * vaccinatedRate));
-    return { month, enrolled: base, vaccinated };
+    const boyShareAmongVaccinated = 0.48 + seededRandom(centreId * 31 + index * 7) * 0.1;
+    const vaccinatedBoys = Math.min(vaccinated, Math.round(vaccinated * boyShareAmongVaccinated));
+    const vaccinatedGirls = Math.max(0, vaccinated - vaccinatedBoys);
+    return { month, enrolled: base, vaccinated, vaccinatedBoys, vaccinatedGirls };
   });
 };
 
@@ -65,16 +83,16 @@ export default function CentreVaccinationStatsPage() {
   const totals = useMemo(() => {
     const enrolledChildren = monthlyStats.reduce((sum, item) => sum + item.enrolled, 0);
     const vaccinatedChildren = monthlyStats.reduce((sum, item) => sum + item.vaccinated, 0);
-    const unvaccinatedChildren = Math.max(0, enrolledChildren - vaccinatedChildren);
+    const vaccinatedBoys = monthlyStats.reduce((sum, item) => sum + item.vaccinatedBoys, 0);
+    const vaccinatedGirls = monthlyStats.reduce((sum, item) => sum + item.vaccinatedGirls, 0);
 
     const boys = Math.round(enrolledChildren * 0.51);
-    const girls = enrolledChildren - boys;
-    const vaccinatedBoys = Math.min(boys, Math.round(vaccinatedChildren * 0.52));
-    const vaccinatedGirls = Math.max(0, vaccinatedChildren - vaccinatedBoys);
-    const unvaccinatedBoys = Math.max(0, boys - vaccinatedBoys);
-    const unvaccinatedGirls = Math.max(0, girls - vaccinatedGirls);
+    const girls = Math.max(0, enrolledChildren - boys);
+    const unvaccinatedBoys = Math.max(0, boys - Math.min(boys, vaccinatedBoys));
+    const unvaccinatedGirls = Math.max(0, girls - Math.min(girls, vaccinatedGirls));
 
-    const coverageRate = enrolledChildren > 0 ? Math.round((vaccinatedChildren / enrolledChildren) * 100) : 0;
+    const coverageRate =
+      enrolledChildren > 0 ? Math.round((vaccinatedChildren / enrolledChildren) * 100) : 0;
 
     return {
       enrolledChildren,
@@ -96,7 +114,7 @@ export default function CentreVaccinationStatsPage() {
   return (
     <PageContainer
       title="Statistiques de Vaccination du Centre"
-      subtitle="Vue annuelle simulée des indicateurs clés par centre de santé"
+      subtitle="12 mois : vaccinés (garçons / filles) et inscrits par mois pour ce poste (données de démonstration, branchement API possible)"
     >
       <div className="space-y-6">
         <div className="rounded-xl border border-blue-200 bg-gradient-to-r from-blue-600 to-blue-500 p-5 text-white shadow-lg">
@@ -198,13 +216,22 @@ export default function CentreVaccinationStatsPage() {
                 const vaccinatedRate = month.enrolled > 0 ? Math.round((month.vaccinated / month.enrolled) * 100) : 0;
                 return (
                   <div key={month.month} className="rounded-lg border border-blue-100 bg-white p-3">
-                    <div className="mb-2 flex items-center justify-between">
+                    <div className="mb-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                       <p className="font-semibold text-slate-800">{month.month}</p>
-                      <p className="text-xs text-slate-500">
-                        Inscrits: <span className="font-semibold text-slate-700">{month.enrolled}</span> • Vaccinés:{" "}
-                        <span className="font-semibold text-blue-700">{month.vaccinated}</span> ({vaccinatedRate}%)
+                      <p className="text-xs text-slate-500 sm:text-right">
+                        Inscrits: <span className="font-semibold text-slate-700">{month.enrolled}</span>
+                        {' · '}
+                        Vaccinés: <span className="font-semibold text-blue-700">{month.vaccinated}</span> (
+                        {vaccinatedRate}%)
                       </p>
                     </div>
+                    <p className="mb-2 text-sm text-slate-700">
+                      <span className="font-medium text-blue-800">Garçons vaccinés :</span>{' '}
+                      <span className="font-bold text-blue-700">{month.vaccinatedBoys}</span>
+                      {' · '}
+                      <span className="font-medium text-rose-800">Filles vaccinées :</span>{' '}
+                      <span className="font-bold text-rose-700">{month.vaccinatedGirls}</span>
+                    </p>
                     <div className="h-2.5 rounded-full bg-blue-100">
                       <div className="h-2.5 rounded-full bg-gradient-to-r from-blue-500 to-blue-700" style={{ width: `${barWidth}%` }} />
                     </div>
