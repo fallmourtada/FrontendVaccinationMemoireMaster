@@ -69,6 +69,99 @@ const readInfirmierOwnedIds = (email?: string | null): InfirmierOwnedIds => {
 };
 
 // ================================
+// IMPORTANCE LOCALE DES VARIABLES
+// ================================
+interface FacteurImportant {
+  label: string;
+  valeur: string;
+  icon: React.ElementType;
+  score: number;       // 0-100 : poids relatif du facteur
+  direction: 'risque' | 'protecteur' | 'neutre';
+  explication: string;
+}
+
+const computeLocalFeatureImportance = (parent: UtilisateurDTO): FacteurImportant[] => {
+  const factors: FacteurImportant[] = [];
+
+  // 1. Retard vaccinal — variable la plus prédictive du modèle
+  const retard = (parent.retard_vaccinal || '').toLowerCase();
+  if (retard === 'oui') {
+    factors.push({ label: 'Retard vaccinal', valeur: parent.retard_vaccinal!, icon: Syringe, score: 93, direction: 'risque', explication: 'Antécédent de retard — facteur prédictif majeur de récidive' });
+  } else if (retard === 'non') {
+    factors.push({ label: 'Retard vaccinal', valeur: parent.retard_vaccinal!, icon: Syringe, score: 93, direction: 'protecteur', explication: 'Aucun antécédent de retard — bonne adhérence au calendrier vaccinal' });
+  }
+
+  // 2. Accès au transport
+  const transport = (parent.acces_transport || '').toLowerCase();
+  if (['difficile', 'non', 'mauvais'].some(v => transport.includes(v))) {
+    factors.push({ label: 'Accès transport', valeur: parent.acces_transport!, icon: Bus, score: 78, direction: 'risque', explication: 'Difficultés de déplacement — obstacle majeur à l\'accès aux soins' });
+  } else if (['facile', 'oui', 'bon'].some(v => transport.includes(v))) {
+    factors.push({ label: 'Accès transport', valeur: parent.acces_transport!, icon: Bus, score: 72, direction: 'protecteur', explication: 'Transport accessible — facilite les consultations vaccinales régulières' });
+  } else if (parent.acces_transport) {
+    factors.push({ label: 'Accès transport', valeur: parent.acces_transport, icon: Bus, score: 50, direction: 'neutre', explication: 'Accès au transport modéré — impact limité sur le suivi vaccinal' });
+  }
+
+  // 3. Niveau de revenu du ménage
+  const revenu = (parent.niveauRevenu || '').toUpperCase();
+  if (revenu === 'BAS') {
+    factors.push({ label: 'Niveau de revenu', valeur: parent.niveauRevenu!, icon: Banknote, score: 70, direction: 'risque', explication: 'Revenu faible — contrainte économique limitant l\'accès aux soins' });
+  } else if (revenu === 'ELEVE') {
+    factors.push({ label: 'Niveau de revenu', valeur: parent.niveauRevenu!, icon: Banknote, score: 65, direction: 'protecteur', explication: 'Revenu élevé — capacité à absorber les coûts liés aux soins' });
+  } else if (revenu === 'MOYEN') {
+    factors.push({ label: 'Niveau de revenu', valeur: parent.niveauRevenu!, icon: Banknote, score: 40, direction: 'neutre', explication: 'Revenu intermédiaire — impact modéré sur l\'accès aux soins' });
+  }
+
+  // 4. Distance au centre de santé
+  const dist = parent.distance_centre_sante;
+  if (dist != null && dist > 0) {
+    if (dist > 20) {
+      factors.push({ label: 'Distance centre', valeur: `${dist} km`, icon: MapPin, score: 82, direction: 'risque', explication: 'Distance très élevée — frein majeur à la vaccination régulière' });
+    } else if (dist > 10) {
+      factors.push({ label: 'Distance centre', valeur: `${dist} km`, icon: MapPin, score: 65, direction: 'risque', explication: 'Distance importante — déplacements coûteux et contraignants' });
+    } else if (dist > 5) {
+      factors.push({ label: 'Distance centre', valeur: `${dist} km`, icon: MapPin, score: 45, direction: 'risque', explication: 'Distance modérée — peut impacter la régularité des visites' });
+    } else {
+      factors.push({ label: 'Distance centre', valeur: `${dist} km`, icon: MapPin, score: 38, direction: 'protecteur', explication: 'Proximité du centre de santé — accès facilité aux vaccinations' });
+    }
+  }
+
+  // 5. Niveau d'instruction
+  const instr = (parent.niveauInstruction || '').toUpperCase();
+  if (instr === 'AUCUN') {
+    factors.push({ label: "Niveau d'instruction", valeur: parent.niveauInstruction!, icon: GraduationCap, score: 62, direction: 'risque', explication: 'Aucune scolarisation — peut limiter la sensibilisation vaccinale' });
+  } else if (instr === 'PRIMAIRE') {
+    factors.push({ label: "Niveau d'instruction", valeur: parent.niveauInstruction!, icon: GraduationCap, score: 38, direction: 'neutre', explication: 'Instruction primaire — sensibilisation partielle aux enjeux de santé' });
+  } else if (instr === 'SECONDAIRE') {
+    factors.push({ label: "Niveau d'instruction", valeur: parent.niveauInstruction!, icon: GraduationCap, score: 52, direction: 'protecteur', explication: 'Instruction secondaire — meilleure compréhension des enjeux vaccinaux' });
+  } else if (instr === 'SUPERIEUR') {
+    factors.push({ label: "Niveau d'instruction", valeur: parent.niveauInstruction!, icon: GraduationCap, score: 72, direction: 'protecteur', explication: 'Instruction supérieure — forte adhérence aux recommandations médicales' });
+  }
+
+  // 6. Zone de résidence
+  const zone = (parent.zoneResidence || '').toUpperCase();
+  if (zone === 'RURALE') {
+    factors.push({ label: 'Zone de résidence', valeur: parent.zoneResidence!, icon: Heart, score: 55, direction: 'risque', explication: 'Zone rurale — accès plus limité aux structures de santé de proximité' });
+  } else if (zone === 'URBAINE') {
+    factors.push({ label: 'Zone de résidence', valeur: parent.zoneResidence!, icon: Heart, score: 48, direction: 'protecteur', explication: 'Zone urbaine — meilleure densité de centres de vaccination disponibles' });
+  }
+
+  // 7. Nombre d'enfants à charge
+  const nb = parent.nombre_enfants;
+  if (nb != null) {
+    if (nb >= 5) {
+      factors.push({ label: "Nombre d'enfants", valeur: `${nb}`, icon: Baby, score: 58, direction: 'risque', explication: 'Famille nombreuse — charge logistique élevée pour les consultations' });
+    } else if (nb >= 3) {
+      factors.push({ label: "Nombre d'enfants", valeur: `${nb}`, icon: Baby, score: 38, direction: 'neutre', explication: 'Famille de taille moyenne — suivi vaccinal modérément complexe' });
+    } else {
+      factors.push({ label: "Nombre d'enfants", valeur: `${nb}`, icon: Baby, score: 42, direction: 'protecteur', explication: 'Peu d\'enfants à charge — suivi vaccinal plus facilement maintenu' });
+    }
+  }
+
+  // Tri par score décroissant, on garde les 5 premiers
+  return factors.sort((a, b) => b.score - a.score).slice(0, 5);
+};
+
+// ================================
 // COMPOSANT JAUGE CIRCULAIRE
 // ================================
 const CircularGauge: React.FC<{
@@ -172,7 +265,7 @@ const RiskResultCard: React.FC<{
     { icon: GraduationCap, label: 'Instruction', value: parent.niveauInstruction || '—' },
     { icon: Baby, label: 'Enfants', value: parent.nombre_enfants != null ? String(parent.nombre_enfants) : '—' },
     { icon: Syringe, label: 'Retard vaccinal', value: parent.retard_vaccinal || '—' },
-    { icon: MapPin, label: 'Distance centre', value: parent.distance_centre_sante != null ? `${parent.distance_centre_sante} km` : '—' },
+    { icon: MapPin, label: 'Distance centre', value: (parent.distance_centre_sante != null && parent.distance_centre_sante > 0) ? `${parent.distance_centre_sante} km` : '—' },
     { icon: Bus, label: 'Transport', value: parent.acces_transport || '—' },
     { icon: Heart, label: 'Zone résidence', value: parent.zoneResidence || '—' },
     { icon: Banknote, label: 'Revenu', value: parent.niveauRevenu || '—' },
@@ -311,6 +404,78 @@ const RiskResultCard: React.FC<{
         </Card>
       </div>
 
+      {/* === VARIABLES DÉTERMINANTES === */}
+      <Card className="shadow-lg border-0 dark:bg-slate-900 overflow-hidden">
+        <div className={`bg-gradient-to-r ${colors.bg} px-6 py-4`}>
+          <h3 className="text-white font-bold text-lg flex items-center gap-2">
+            <BarChart3 className="h-5 w-5" />
+            Variables déterminantes
+          </h3>
+          <p className="text-white/70 text-xs mt-0.5">
+            Facteurs ayant le plus influencé cette prédiction pour ce parent
+          </p>
+        </div>
+        <CardContent className="pt-5 space-y-5">
+          {computeLocalFeatureImportance(parent).map((facteur, i) => {
+            const dirColor =
+              facteur.direction === 'risque'      ? '#dc2626'
+              : facteur.direction === 'protecteur' ? '#16a34a'
+              : '#d97706';
+            const dirBadge =
+              facteur.direction === 'risque'      ? 'bg-red-50 text-red-700 border-red-200'
+              : facteur.direction === 'protecteur' ? 'bg-green-50 text-green-700 border-green-200'
+              : 'bg-amber-50 text-amber-700 border-amber-200';
+            const dirLabel =
+              facteur.direction === 'risque'      ? '↑ Risque'
+              : facteur.direction === 'protecteur' ? '↓ Protecteur'
+              : '→ Neutre';
+            const barClass =
+              facteur.direction === 'risque'      ? 'bg-red-500'
+              : facteur.direction === 'protecteur' ? 'bg-green-500'
+              : 'bg-amber-400';
+
+            return (
+              <div key={i} className="space-y-1.5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-2 min-w-0">
+                    <div className={`p-1.5 ${colors.light} rounded-lg shrink-0 mt-0.5`}>
+                      <facteur.icon className="h-4 w-4" style={{ color: colors.main }} />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                          {facteur.label}
+                        </span>
+                        <span className="text-xs font-bold" style={{ color: dirColor }}>
+                          {facteur.valeur}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400 dark:text-slate-500 leading-relaxed mt-0.5">
+                        {facteur.explication}
+                      </p>
+                    </div>
+                  </div>
+                  <span className={`text-xs font-semibold px-2 py-1 rounded-full border whitespace-nowrap shrink-0 ${dirBadge}`}>
+                    {dirLabel}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 pl-9">
+                  <div className="flex-1 bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${barClass} transition-all duration-1000 ease-out`}
+                      style={{ width: `${facteur.score}%` }}
+                    />
+                  </div>
+                  <span className="text-xs font-bold text-slate-400 w-8 text-right">
+                    {facteur.score}%
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </CardContent>
+      </Card>
+
       {/* Bouton relancer */}
       <div className="flex justify-center">
         <Button
@@ -376,6 +541,34 @@ const ParentSelectCard: React.FC<{
 };
 
 // ================================
+// DONNÉES DÉMO — Aperçu "Risque modéré"
+// ================================
+const DEMO_PARENT: UtilisateurDTO = {
+  id: null,
+  email: 'demo@vaccimed.sn',
+  prenom: 'Aminata',
+  nom: 'Diallo (Exemple)',
+  telephone: '77 500 12 34',
+  userRole: UserRole.PARENT,
+  niveauInstruction: 'PRIMAIRE',
+  nombre_enfants: 3,
+  retard_vaccinal: 'Oui',
+  distance_centre_sante: 5,
+  acces_transport: 'Difficile',
+  zoneResidence: 'RURALE',
+  niveauRevenu: 'MOYEN',
+};
+
+const DEMO_RESULT: PredictionResult = {
+  prediction: 'Risque modéré',
+  probabilities: {
+    'Faible risque': 14.7,
+    'Risque modéré': 63.5,
+    'Haut risque': 21.8,
+  },
+};
+
+// ================================
 // PAGE PRINCIPALE PRÉDICTION
 // ================================
 const PredictionRisquePage: React.FC = () => {
@@ -392,6 +585,7 @@ const PredictionRisquePage: React.FC = () => {
   const [selectedParentId, setSelectedParentId] = useState<number | null>(null);
   const [predictionResult, setPredictionResult] = useState<PredictionResult | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isDemoMode, setIsDemoMode] = useState(false);
 
   // Récupérer les parents
   const parents = useMemo(() => {
@@ -477,9 +671,9 @@ const PredictionRisquePage: React.FC = () => {
             <Activity className="h-8 w-8 text-white" />
           </div>
           <div className="text-white">
-            <h1 className="text-4xl font-black drop-shadow-lg">Analyse de risque CPN</h1>
+            <h1 className="text-4xl font-black drop-shadow-lg">Analyse du risque de retard ou d'abandon vaccinal</h1>
             <p className="text-blue-100 text-lg font-medium drop-shadow mt-2">
-              Prédiction intelligente du niveau de risque vaccinal par parent
+              Prédiction intelligente du niveau de risque de retard ou d'abandon vaccinal par parent
             </p>
           </div>
           <Button 
@@ -549,7 +743,31 @@ const PredictionRisquePage: React.FC = () => {
 
         {/* === COLONNE DROITE : RÉSULTATS === */}
         <div className="lg:col-span-8">
-          {!selectedParent ? (
+          {isDemoMode ? (
+            /* Mode aperçu Risque modéré */
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Badge className="bg-amber-100 text-amber-700 border border-amber-300 gap-1.5 px-3 py-1.5">
+                  <Info className="h-3.5 w-3.5" />
+                  Aperçu — données d'exemple (Risque modéré)
+                </Badge>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-slate-500 hover:text-slate-700 text-xs"
+                  onClick={() => setIsDemoMode(false)}
+                >
+                  ✕ Fermer l'aperçu
+                </Button>
+              </div>
+              <RiskResultCard
+                parent={DEMO_PARENT}
+                result={DEMO_RESULT}
+                onRefresh={() => {}}
+                isRefreshing={false}
+              />
+            </div>
+          ) : !selectedParent ? (
             /* État initial - aucun parent sélectionné */
             <Card className="shadow-lg border-dashed border-2 border-slate-200">
               <CardContent className="flex flex-col items-center justify-center py-20">
@@ -560,9 +778,22 @@ const PredictionRisquePage: React.FC = () => {
                   Sélectionnez un parent
                 </h3>
                 <p className="text-slate-400 text-center max-w-md">
-                  Choisissez un parent dans la liste à gauche pour lancer une analyse
-                  de risque CPN alimentée par l'intelligence artificielle.
+                  Choisissez un parent dans la liste à gauche pour lancer l'analyse
+                  du risque de retard ou d'abandon vaccinal par intelligence artificielle.
                 </p>
+                <div className="mt-6 flex items-center gap-3 w-full max-w-xs">
+                  <div className="h-px flex-1 bg-slate-200" />
+                  <span className="text-xs text-slate-400">ou</span>
+                  <div className="h-px flex-1 bg-slate-200" />
+                </div>
+                <Button
+                  variant="outline"
+                  className="mt-4 gap-2 border-amber-300 text-amber-700 hover:bg-amber-50 hover:border-amber-400"
+                  onClick={() => setIsDemoMode(true)}
+                >
+                  <ShieldQuestion className="h-4 w-4" />
+                  Aperçu Risque modéré
+                </Button>
               </CardContent>
             </Card>
           ) : predictMutation.isPending ? (

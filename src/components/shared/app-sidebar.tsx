@@ -9,14 +9,14 @@ import {
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
-  SidebarMenuButton,
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
 import { Separator } from "@/components/ui/separator";
 import { AppLogo } from "@/utils/common";
 import { UserAvatar } from "./user-avatar";
-import type { UserDTO } from "@/types";
+import type { UtilisateurDTO } from "@/types";
+import { useDecodedToken } from "@/contexts/decoded-token-context";
 
 
 
@@ -66,22 +66,21 @@ const sections = [
   }
 ];
 
-const user: UserDTO = {
-  prenom: "Abdoulaye",
-  nom: "Diagne",
-  email: "abdoulaye@gmail.com",
-  role: "ROLE_ADMIN",
-  telephone: "771234567",
-  dateNaissance: "1990-01-01",
-  regionId: null,
-  departementId: null,
-  communeId: null,
-  id: null
-}
-
 export function AppSidebar({itemsProp, pageTitle}: {itemsProp?: typeof sections, pageTitle:string}) {
     const { state } = useSidebar();
     const isCollapsed = state === "collapsed";
+
+    const { decodedToken } = useDecodedToken();
+
+    const sidebarUser: UtilisateurDTO | null = decodedToken
+        ? {
+            id: null,
+            prenom: decodedToken.sub.split('@')[0] ?? '—',
+            nom: '',
+            email: decodedToken.sub,
+            userRole: decodedToken.role.replace('ROLE_', '') as any,
+          }
+        : null;
 
     const location = useLocation();
     const isActive: (path: string) => boolean = (path) => location.pathname === path;
@@ -146,7 +145,7 @@ export function AppSidebar({itemsProp, pageTitle}: {itemsProp?: typeof sections,
 
     <div className="bg-inherit md:shadow-inner hover:none pb-3 border-t border-blue-100 dark:border-blue-900">
       <SidebarFooter>
-        <UserAvatar user={user} />
+        {sidebarUser && <UserAvatar user={sidebarUser} />}
       </SidebarFooter>
       </div>
     </Sidebar>

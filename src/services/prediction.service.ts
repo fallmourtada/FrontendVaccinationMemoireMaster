@@ -36,8 +36,9 @@ export interface PredictionResult {
 // ================================
 
 const predictionClient = axios.create({
-  baseURL: '/prediction-api',
-  timeout: 15000,
+  // baseURL: '/prediction-api', // Ancienne URL locale — FastAPI sur http://localhost:8000 (via proxy Vite)
+  baseURL: 'https://mourtada23-vaccination-risk-prediction-api.hf.space', // Modèle déployé sur HuggingFace Spaces
+  timeout: 30000, // Augmenté à 30s pour le cold-start HuggingFace
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
